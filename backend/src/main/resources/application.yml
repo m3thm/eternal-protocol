@@ -1,0 +1,68 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: eternal-protocol-api
+
+  # Default multipart limit is 1MB, too small for real product photos.
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+  # ---- Default profile: H2 in-memory DB, zero setup, resets on every restart ----
+  # Good for local development without installing anything. To use a real,
+  # persistent MySQL database instead, see application-mysql.yml and run
+  # with the "mysql" profile active (see README.md for exact commands) —
+  # nothing in the Java code needs to change, only this config.
+  datasource:
+    url: jdbc:h2:mem:eternalprotocol;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console   # visit http://localhost:8080/h2-console to inspect data
+
+  jpa:
+    hibernate:
+      ddl-auto: update      # auto-creates/updates tables from entities — fine for a student project
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+app:
+  base-url: http://localhost:8080     # this backend's own public URL (used to build PayHere notify_url / redirect page)
+
+  frontend:
+    base-url: http://localhost:5173   # used to build PayHere return_url/cancel_url — both point to /order/{id}/confirmation on this frontend
+
+  jwt:
+    # 256-bit+ secret required for HS256 — replace with a real random value
+    # (e.g. `openssl rand -base64 32`) before any real deployment; never
+    # commit a production secret to version control.
+    secret: ${JWT_SECRET}
+    expiration-ms: 86400000            # 24 hours
+
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+
+  cloudinary:
+    # Free tier sign-up: https://cloudinary.com/users/register/free
+    # Find these three values on your Cloudinary Dashboard homepage after signing up.
+  cloud-name: ${CLOUDINARY_CLOUD_NAME}
+  api-key: ${CLOUDINARY_API_KEY}
+  api-secret: ${CLOUDINARY_API_SECRET}
+
+  payhere:
+    # PLACEHOLDERS — sign up for a free sandbox account at
+    # https://www.payhere.lk/support/sandbox to get your own merchant_id and
+    # merchant_secret, then replace these. Checkout will not work until you do.
+  merchant-id: ${PAYHERE_MERCHANT_ID}
+  merchant-secret: ${PAYHERE_MERCHANT_SECRET}
+  checkout-url: https://sandbox.payhere.lk/pay/checkout

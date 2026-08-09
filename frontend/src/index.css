@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Eternal Protocol dark premium palette */
+  --color-ep-black: #0a0a0a;
+  --color-ep-surface: #141414;
+  --color-ep-surface-2: #1e1e1e;
+  --color-ep-border: #2a2a2a;
+  --color-ep-bone: #f2efe9;
+  --color-ep-muted: #8f8c85;
+  --color-ep-red: #8c1c1c;
+  --color-ep-red-bright: #b8241e;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-ep-black text-ep-bone antialiased;
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer utilities {
+  .tracking-widest-plus {
+    letter-spacing: 0.25em;
+  }
+}

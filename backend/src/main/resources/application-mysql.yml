@@ -1,0 +1,25 @@
+# Activate this profile to use a real, persistent MySQL database instead of
+# the default in-memory H2. See README.md for the exact command to run with
+# this profile active. All `app.*` settings (JWT secret, PayHere, CORS) are
+# still read from application.yml — only the datasource/jpa settings here
+# override the defaults.
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/eternal_protocol?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: ${MYSQL_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    open-in-view: false
+
+  h2:
+    console:
+      enabled: false   # no H2 database in this profile, so no console either
