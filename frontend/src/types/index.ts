@@ -41,6 +41,21 @@ export interface UploadImageResponse {
   imageUrl: string
 }
 
+// One gallery photo, scoped to a style+colour (shared across every size row
+// of that colour) — what the PDP carousel and admin gallery editor use.
+export interface ProductImageDto {
+  id: number
+  colour: string
+  imageUrl: string
+  sortOrder: number
+}
+
+export interface ProductImageInput {
+  colour: string
+  imageUrl: string
+  sortOrder?: number
+}
+
 // ---- Module 2: Cart, Checkout & Payment ----
 
 export interface ValidateCodeResponse {

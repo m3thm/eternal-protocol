@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { productsApi } from '@/api/products'
@@ -8,6 +8,7 @@ import { useGuestCartStore } from '@/stores/cart'
 import { useToastStore } from '@/stores/toast'
 import { Button } from '@/components/ui/Button'
 import { Price } from '@/components/ui/Price'
+import { ProductImageCarousel } from '@/components/ui/ProductImageCarousel'
 import { getErrorMessage } from '@/api/client'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
@@ -34,8 +35,33 @@ export function ProductDetailPage() {
     enabled: !!product?.styleCode,
   })
 
+  // Full photo gallery for this style, every colour — grouped client-side so
+  // the carousel can swap its whole image set the moment the colour changes.
+  const { data: galleryImages } = useQuery({
+    queryKey: ['product-images', product?.styleCode],
+    queryFn: () => productsApi.imagesByStyle(product!.styleCode),
+    enabled: !!product?.styleCode,
+  })
+
   const [selectedColour, setSelectedColour] = useState<string | null>(null)
   const [selectedSize, setSelectedSize] = useState<string | null>(null)
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
+
+  const colour = selectedColour ?? product?.colour ?? ''
+
+  const imagesByColour = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const img of galleryImages ?? []) {
+      ;(map[img.colour] ??= []).push(img.imageUrl)
+    }
+    return map
+  }, [galleryImages])
+
+  // Reset to the first photo whenever the shopper picks a different colour —
+  // otherwise they'd land on e.g. frame 3 of a set that might only have 2.
+  useEffect(() => {
+    setActiveImageIndex(0)
+  }, [colour])
 
   if (isLoading) {
     return <div className="mx-auto max-w-7xl px-4 py-20 text-sm text-ep-muted">Loading…</div>
@@ -44,13 +70,21 @@ export function ProductDetailPage() {
     return <NotFoundPage />
   }
 
-  const colour = selectedColour ?? product.colour
   const size = selectedSize ?? product.size
   const colours = Array.from(new Set((variants ?? [product]).map((v) => v.colour)))
   const sizes = Array.from(new Set((variants ?? [product]).map((v) => v.size)))
   const activeVariant =
     (variants ?? [product]).find((v) => v.colour === colour && v.size === size) ?? product
   const outOfStock = activeVariant.stockQty < 1
+
+  // Fall back to the variant's single cover image if the gallery hasn't loaded
+  // yet, or if this colour has no gallery rows (e.g. legacy product created
+  // before the gallery feature — imageUrl still works as a single-image set).
+  const carouselImages = imagesByColour[colour]?.length
+    ? imagesByColour[colour]
+    : activeVariant.imageUrl
+      ? [activeVariant.imageUrl]
+      : []
 
   async function handleAddToCart() {
     if (outOfStock) return
@@ -82,15 +116,12 @@ export function ProductDetailPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="grid gap-10 lg:grid-cols-2">
-        <div className="aspect-[3/4] overflow-hidden bg-ep-surface">
-          {activeVariant.imageUrl ? (
-            <img src={activeVariant.imageUrl} alt={activeVariant.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-widest text-ep-muted">
-              No image
-            </div>
-          )}
-        </div>
+        <ProductImageCarousel
+          images={carouselImages}
+          alt={`${product.name} — ${colour}`}
+          activeIndex={activeImageIndex}
+          onChange={setActiveImageIndex}
+        />
 
         <div>
           <h1 className="font-display text-4xl">{product.name}</h1>

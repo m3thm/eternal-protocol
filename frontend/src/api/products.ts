@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ProductDto, ProductInput, UploadImageResponse } from '@/types'
+import type { ProductDto, ProductImageDto, ProductImageInput, ProductInput, UploadImageResponse } from '@/types'
 
 export interface ProductQuery {
   colour?: string
@@ -38,4 +38,21 @@ export const productsApi = {
       })
       .then((r) => r.data)
   },
+
+  /** Full gallery for a style, every colour — what the PDP carousel groups by colour. */
+  imagesByStyle: (styleCode: string) =>
+    apiClient.get<ProductImageDto[]>(`/api/products/style/${styleCode}/images`).then((r) => r.data),
+
+  /** Attach an already-uploaded image (see uploadImage) to a style+colour's gallery. */
+  addImage: (styleCode: string, input: ProductImageInput) =>
+    apiClient.post<ProductImageDto>(`/api/products/style/${styleCode}/images`, input).then((r) => r.data),
+
+  removeImage: (imageId: number) => apiClient.delete(`/api/products/images/${imageId}`),
+
+  reorderImages: (styleCode: string, colour: string, orderedImageIds: number[]) =>
+    apiClient
+      .put<ProductImageDto[]>(`/api/products/style/${styleCode}/images/reorder`, { orderedImageIds }, {
+        params: { colour },
+      })
+      .then((r) => r.data),
 }

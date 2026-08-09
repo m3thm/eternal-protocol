@@ -55,14 +55,14 @@ app:
   cloudinary:
     # Free tier sign-up: https://cloudinary.com/users/register/free
     # Find these three values on your Cloudinary Dashboard homepage after signing up.
-  cloud-name: ${CLOUDINARY_CLOUD_NAME}
-  api-key: ${CLOUDINARY_API_KEY}
-  api-secret: ${CLOUDINARY_API_SECRET}
+    cloud-name: ${CLOUDINARY_CLOUD_NAME}
+    api-key: ${CLOUDINARY_API_KEY}
+    api-secret: ${CLOUDINARY_API_SECRET}
 
   payhere:
     # PLACEHOLDERS — sign up for a free sandbox account at
     # https://www.payhere.lk/support/sandbox to get your own merchant_id and
     # merchant_secret, then replace these. Checkout will not work until you do.
-  merchant-id: ${PAYHERE_MERCHANT_ID}
-  merchant-secret: ${PAYHERE_MERCHANT_SECRET}
-  checkout-url: https://sandbox.payhere.lk/pay/checkout
+    merchant-id: ${PAYHERE_MERCHANT_ID}
+    merchant-secret: ${PAYHERE_MERCHANT_SECRET}
+    checkout-url: https://sandbox.payhere.lk/pay/checkout

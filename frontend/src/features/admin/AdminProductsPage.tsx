@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { FormInput, FormTextarea } from '@/components/ui/FormField'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Price } from '@/components/ui/Price'
-import type { ProductDto, ProductInput } from '@/types'
+import type { ProductDto, ProductImageDto, ProductInput } from '@/types'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -255,6 +255,17 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
             <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileSelect} className="text-sm text-ep-muted" />
           </div>
           {uploadProgress !== null && <p className="mt-1 text-xs text-ep-muted">Uploading… {uploadProgress}%</p>}
+          <p className="mt-1 text-xs text-ep-muted">
+            This is the cover photo shown on the shop grid. It's kept in sync with the first photo below automatically.
+          </p>
+        </div>
+
+        <div className="mt-6">
+          {form.styleCode.trim() && form.colour.trim() ? (
+            <ProductGalleryEditor styleCode={form.styleCode.trim()} colour={form.colour.trim()} />
+          ) : (
+            <p className="text-xs text-ep-muted">Enter a style code and colour to manage this colour's photo gallery.</p>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -266,6 +277,146 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
           </Button>
         </div>
       </form>
+    </div>
+  )
+}
+
+/**
+ * Manages the carousel photo set for one style+colour. Deliberately
+ * independent of whether the Product row itself has been saved yet — the
+ * gallery is keyed on the (styleCode, colour) strings, not a product id, so
+ * an admin can build out photos for a colour before or after saving sizes
+ * for it. Every add/delete/reorder here also updates that colour's
+ * Product.imageUrl on the backend (see ProductImageService), which is what
+ * keeps the shop-grid thumbnail in sync automatically.
+ */
+function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour: string }) {
+  const queryClient = useQueryClient()
+  const pushToast = useToastStore((s) => s.push)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+
+  const galleryKey = ['product-images', styleCode]
+
+  const { data: allImages, isLoading } = useQuery({
+    queryKey: galleryKey,
+    queryFn: () => productsApi.imagesByStyle(styleCode),
+  })
+
+  const images = (allImages ?? [])
+    .filter((img) => img.colour.toLowerCase() === colour.toLowerCase())
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: galleryKey })
+
+  const addMutation = useMutation({
+    mutationFn: (file: File) =>
+      productsApi
+        .uploadImage(file, setUploadProgress)
+        .then((res) => productsApi.addImage(styleCode, { colour, imageUrl: res.imageUrl })),
+    onSuccess: () => {
+      invalidate()
+      setUploadProgress(null)
+    },
+    onError: (err) => {
+      pushToast(getErrorMessage(err, 'Image upload failed'), 'error')
+      setUploadProgress(null)
+    },
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (imageId: number) => productsApi.removeImage(imageId),
+    onSuccess: invalidate,
+    onError: (err) => pushToast(getErrorMessage(err), 'error'),
+  })
+
+  const reorderMutation = useMutation({
+    mutationFn: (orderedImageIds: number[]) => productsApi.reorderImages(styleCode, colour, orderedImageIds),
+    onSuccess: invalidate,
+    onError: (err) => pushToast(getErrorMessage(err), 'error'),
+  })
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      pushToast('Please choose a JPEG, PNG, WebP, or GIF image.', 'error')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      pushToast('Image must be 5MB or smaller.', 'error')
+      return
+    }
+    addMutation.mutate(file)
+    e.target.value = ''
+  }
+
+  function move(index: number, direction: -1 | 1) {
+    const target = index + direction
+    if (target < 0 || target >= images.length) return
+    const reordered = [...images]
+    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+    reorderMutation.mutate(reordered.map((img) => img.id))
+  }
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-xs uppercase tracking-widest text-ep-muted">
+        Photo gallery — {colour} (all sizes)
+      </span>
+
+      {isLoading ? (
+        <p className="text-xs text-ep-muted">Loading gallery…</p>
+      ) : images.length === 0 ? (
+        <p className="text-xs text-ep-muted">No photos yet for this colour.</p>
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          {images.map((img: ProductImageDto, i: number) => (
+            <div key={img.id} className="relative">
+              <div className="h-20 w-16 overflow-hidden bg-ep-surface-2">
+                <img src={img.imageUrl} alt="" className="h-full w-full object-cover" />
+              </div>
+              <div className="mt-1 flex items-center justify-center gap-1">
+                <button
+                  type="button"
+                  disabled={i === 0}
+                  onClick={() => move(i, -1)}
+                  className="text-[10px] text-ep-muted hover:text-ep-bone disabled:opacity-30"
+                  aria-label="Move earlier"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeMutation.mutate(img.id)}
+                  className="text-[10px] text-ep-muted hover:text-red-400"
+                  aria-label="Remove photo"
+                >
+                  ✕
+                </button>
+                <button
+                  type="button"
+                  disabled={i === images.length - 1}
+                  onClick={() => move(i, 1)}
+                  className="text-[10px] text-ep-muted hover:text-ep-bone disabled:opacity-30"
+                  aria-label="Move later"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3">
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={handleFileSelect}
+          className="text-sm text-ep-muted"
+        />
+        {uploadProgress !== null && <p className="mt-1 text-xs text-ep-muted">Uploading… {uploadProgress}%</p>}
+      </div>
     </div>
   )
 }
