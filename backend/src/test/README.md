@@ -96,6 +96,9 @@ The integration tests all use `@Transactional`, so anything a test writes
 to the database (a new product, a new customer, an order) is automatically
 rolled back after that test method finishes. This means tests can run in
 any order without polluting each other, and you don't need to reset your
-database between runs — including the one seeded by `DataSeeder`
-(`admin@eternalprotocol.com` / `admin123`), which several tests log in with
-directly.
+database between runs. Tests that need an admin login create their own
+admin directly via `AdminRepository` (see `AuthTestHelper.createAdminAndGetToken`)
+rather than depending on a fixed seeded account — there's no `DataSeeder`
+any more; the only admin creation that happens outside tests is
+`AdminBootstrap`, which is opt-in via `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD`
+in `.env` and only runs when the `admins` table is empty.

@@ -3,6 +3,7 @@ package com.eternalprotocol.api.integration;
 import com.eternalprotocol.api.dto.CreateAthleteRequestDto;
 import com.eternalprotocol.api.dto.UpdateAthleteRequestDto;
 import com.eternalprotocol.api.entity.*;
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.eternalprotocol.api.repository.AthleteRepository;
 import com.eternalprotocol.api.repository.CommissionRepository;
 import com.eternalprotocol.api.repository.CustomerRepository;
@@ -45,10 +46,16 @@ class AdminIntegrationTest {
     @Autowired
     private CustomerRepository customerRepository;
     @Autowired
+    private AdminRepository adminRepository;
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private String adminToken() throws Exception {
-        return loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        // Each test that calls this does so at most once, inside its own
+        // rolled-back transaction, so a fixed email here is safe — no
+        // reliance on DataSeeder's old fixed admin login any more.
+        return createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder,
+                "admin.integration@example.com", "adminpass123");
     }
 
     // ---- access control: every /api/admin/** route needs ADMIN ----

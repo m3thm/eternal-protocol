@@ -2,12 +2,15 @@ package com.eternalprotocol.api.integration;
 
 import com.eternalprotocol.api.dto.LoginRequestDto;
 import com.eternalprotocol.api.dto.RegisterRequestDto;
+import com.eternalprotocol.api.entity.Admin;
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,10 @@ class AuthIntegrationTest {
     private MockMvc mockMvc;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private AdminRepository adminRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Test
     void register_newCustomer_returns200WithTokenAndCustomerRole() throws Exception {
@@ -104,11 +111,19 @@ class AuthIntegrationTest {
     }
 
     @Test
-    void login_seededAdminCredentials_returns200WithAdminRole() throws Exception {
-        // Confirms DataSeeder's default admin login actually works end to
-        // end — this is the account your group will use to demo the admin
-        // dashboard, so it's worth its own explicit test.
-        LoginRequestDto loginRequest = new LoginRequestDto("admin@eternalprotocol.com", "admin123");
+    void login_adminCredentials_returns200WithAdminRole() throws Exception {
+        // No longer relies on a global seeder creating a fixed admin login —
+        // that account doesn't exist by default any more (see AdminBootstrap,
+        // which only creates one from ADMIN_BOOTSTRAP_EMAIL/PASSWORD if set).
+        // This test creates its own admin directly so it stays self-contained
+        // regardless of what's configured in .env.
+        Admin admin = new Admin();
+        admin.setName("Test Admin");
+        admin.setEmail("admin.test@example.com");
+        admin.setPasswordHash(passwordEncoder.encode("adminpass123"));
+        adminRepository.save(admin);
+
+        LoginRequestDto loginRequest = new LoginRequestDto("admin.test@example.com", "adminpass123");
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(loginRequest)))

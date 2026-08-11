@@ -1,6 +1,7 @@
 package com.eternalprotocol.api.integration;
 
 import com.eternalprotocol.api.dto.ProductRequestDto;
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,9 +28,29 @@ class ProductIntegrationTest {
     private MockMvc mockMvc;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private AdminRepository adminRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private String adminToken(String email) throws Exception {
+        return createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder, email, "adminpass123");
+    }
 
     @Test
-    void getAllProducts_noAuthRequired_returnsSeededProduct() throws Exception {
+    void getAllProducts_noAuthRequired_returnsCreatedProduct() throws Exception {
+        // No more DataSeeder guaranteeing a product exists — create one
+        // directly so this test is self-contained regardless of what else
+        // is in the DB.
+        String adminToken = adminToken("product.list.admin@example.com");
+        ProductRequestDto request = new ProductRequestDto(
+                "LIST-TEST", "Listing Test Tee", new BigDecimal("2000.00"), "Grey", "M", 10, null, null);
+        mockMvc.perform(post("/api/products")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
         mockMvc.perform(get("/api/products"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -72,7 +94,7 @@ class ProductIntegrationTest {
 
     @Test
     void createProduct_adminToken_succeedsAndProductIsRetrievable() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken("product.create.admin@example.com");
         ProductRequestDto request = new ProductRequestDto(
                 "TEST-STYLE", "Integration Test Tee", new BigDecimal("3000.00"), "White", "L", 20,
                 "https://example.com/img.png", "A test product");
@@ -95,7 +117,7 @@ class ProductIntegrationTest {
 
     @Test
     void updateProduct_adminToken_persistsChanges() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken("product.update.admin@example.com");
         ProductRequestDto createRequest = new ProductRequestDto(
                 "TEST-STYLE", "Original Name", new BigDecimal("1000.00"), "Red", "S", 5, null, null);
 
@@ -120,7 +142,7 @@ class ProductIntegrationTest {
 
     @Test
     void deleteProduct_adminToken_removesIt() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken("product.delete.admin@example.com");
         ProductRequestDto createRequest = new ProductRequestDto(
                 "TEST-STYLE", "To Be Deleted", new BigDecimal("500.00"), "Black", "S", 1, null, null);
 
@@ -141,7 +163,7 @@ class ProductIntegrationTest {
 
     @Test
     void getAllProducts_styleCodeFilter_returnsOnlyMatchingVariants() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken("product.filter.admin@example.com");
         String styleCode = "GROUPING-TEST-" + System.nanoTime(); // unique per run, avoids clashing with seed data
 
         ProductRequestDto blackVariant = new ProductRequestDto(
@@ -169,7 +191,7 @@ class ProductIntegrationTest {
 
     @Test
     void createProduct_missingStyleCode_returns400() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken("product.missingstyle.admin@example.com");
         String jsonMissingStyleCode = """
                 {"name":"No Style Code Tee","price":1000.00,"colour":"Black","size":"M","stockQty":5}
                 """;
@@ -183,7 +205,7 @@ class ProductIntegrationTest {
 
     @Test
     void createProduct_missingRequiredFields_returns400() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken("product.missingfields.admin@example.com");
         String malformedJson = """
                 {"name":"","price":null,"colour":"","size":"","stockQty":null}
                 """;

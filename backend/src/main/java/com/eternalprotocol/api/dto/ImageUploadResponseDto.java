@@ -1,5 +1,6 @@
 package com.eternalprotocol.api.dto;
 
-/** Returned by the image upload endpoint — frontend takes this URL and
- *  includes it as `imageUrl` in a subsequent create/update product request. */
-public record ImageUploadResponseDto(String imageUrl) {}
+/** Returned by the image upload endpoint. imageUrl is what gets displayed;
+ *  publicId is Cloudinary's own asset ID, kept so a later delete can remove
+ *  the exact asset from Cloudinary instead of guessing at it from the URL. */
+public record ImageUploadResponseDto(String imageUrl, String publicId) {}

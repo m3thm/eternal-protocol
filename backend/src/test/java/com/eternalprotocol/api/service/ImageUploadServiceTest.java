@@ -14,9 +14,12 @@ import java.io.IOException;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,17 +34,19 @@ class ImageUploadServiceTest {
     private ImageUploadService imageUploadService;
 
     @Test
-    void uploadProductImage_validPngUnder5MB_returnsSecureUrl() throws IOException {
+    void uploadProductImage_validPngUnder5MB_returnsSecureUrlAndPublicId() throws IOException {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "tee.png", "image/png", "fake-image-bytes".getBytes());
 
         when(cloudinary.uploader()).thenReturn(uploader);
         when(uploader.upload(any(), anyMap())).thenReturn(
-                Map.of("secure_url", "https://res.cloudinary.com/demo/image/upload/tee.png"));
+                Map.of("secure_url", "https://res.cloudinary.com/demo/image/upload/tee.png",
+                        "public_id", "eternal-protocol/products/tee123"));
 
-        String result = imageUploadService.uploadProductImage(file);
+        ImageUploadService.UploadResult result = imageUploadService.uploadProductImage(file);
 
-        assertThat(result).isEqualTo("https://res.cloudinary.com/demo/image/upload/tee.png");
+        assertThat(result.url()).isEqualTo("https://res.cloudinary.com/demo/image/upload/tee.png");
+        assertThat(result.publicId()).isEqualTo("eternal-protocol/products/tee123");
     }
 
     @Test
@@ -95,11 +100,39 @@ class ImageUploadServiceTest {
     @Test
     void uploadProductImage_acceptsAllFourAllowedContentTypes() throws IOException {
         when(cloudinary.uploader()).thenReturn(uploader);
-        when(uploader.upload(any(), anyMap())).thenReturn(Map.of("secure_url", "https://example.com/img"));
+        when(uploader.upload(any(), anyMap())).thenReturn(
+                Map.of("secure_url", "https://example.com/img", "public_id", "id"));
 
         for (String contentType : new String[]{"image/jpeg", "image/png", "image/webp", "image/gif"}) {
             MockMultipartFile file = new MockMultipartFile("file", "img", contentType, "bytes".getBytes());
-            assertThat(imageUploadService.uploadProductImage(file)).isEqualTo("https://example.com/img");
+            assertThat(imageUploadService.uploadProductImage(file).url()).isEqualTo("https://example.com/img");
         }
+    }
+
+    // ---- deleteProductImage ----
+
+    @Test
+    void deleteProductImage_validPublicId_callsCloudinaryDestroy() throws IOException {
+        when(cloudinary.uploader()).thenReturn(uploader);
+
+        imageUploadService.deleteProductImage("eternal-protocol/products/tee123");
+
+        verify(uploader).destroy(org.mockito.ArgumentMatchers.eq("eternal-protocol/products/tee123"), anyMap());
+    }
+
+    @Test
+    void deleteProductImage_nullOrBlankPublicId_doesNothing() {
+        assertThatCode(() -> imageUploadService.deleteProductImage(null)).doesNotThrowAnyException();
+        assertThatCode(() -> imageUploadService.deleteProductImage("  ")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void deleteProductImage_cloudinaryThrows_doesNotPropagateException() throws IOException {
+        // A failed Cloudinary delete must never block the caller — the DB
+        // row is already gone by the time this runs (see ProductImageService).
+        when(cloudinary.uploader()).thenReturn(uploader);
+        when(uploader.destroy(anyString(), anyMap())).thenThrow(new IOException("Cloudinary unreachable"));
+
+        assertThatCode(() -> imageUploadService.deleteProductImage("some-id")).doesNotThrowAnyException();
     }
 }

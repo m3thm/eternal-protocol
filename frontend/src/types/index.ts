@@ -33,26 +33,30 @@ export interface ProductInput {
   colour: string
   size: string
   stockQty: number
-  imageUrl?: string
   description?: string
 }
 
 export interface UploadImageResponse {
   imageUrl: string
+  publicId: string
 }
 
 // One gallery photo, scoped to a style+colour (shared across every size row
 // of that colour) — what the PDP carousel and admin gallery editor use.
+// The cover photo (isCover) is what ends up as ProductDto.imageUrl — chosen
+// from the gallery rather than uploaded separately.
 export interface ProductImageDto {
   id: number
   colour: string
   imageUrl: string
   sortOrder: number
+  isCover: boolean
 }
 
 export interface ProductImageInput {
   colour: string
   imageUrl: string
+  publicId?: string
   sortOrder?: number
 }
 

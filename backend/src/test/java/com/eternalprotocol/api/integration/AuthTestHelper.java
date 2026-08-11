@@ -3,8 +3,11 @@ package com.eternalprotocol.api.integration;
 import com.eternalprotocol.api.dto.AuthResponseDto;
 import com.eternalprotocol.api.dto.LoginRequestDto;
 import com.eternalprotocol.api.dto.RegisterRequestDto;
+import com.eternalprotocol.api.entity.Admin;
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,6 +35,23 @@ class AuthTestHelper {
                         .content(objectMapper.writeValueAsString(request)))
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readValue(responseJson, AuthResponseDto.class).token();
+    }
+
+    /**
+     * Creates an admin directly in the DB (there's no public "register as
+     * admin" endpoint, by design — see AdminBootstrap) and logs in as them.
+     * Replaces the old pattern of relying on DataSeeder's fixed
+     * admin@eternalprotocol.com login, which no longer exists by default.
+     */
+    static String createAdminAndGetToken(MockMvc mockMvc, ObjectMapper objectMapper,
+                                          AdminRepository adminRepository, PasswordEncoder passwordEncoder,
+                                          String email, String password) throws Exception {
+        Admin admin = new Admin();
+        admin.setName("Test Admin");
+        admin.setEmail(email);
+        admin.setPasswordHash(passwordEncoder.encode(password));
+        adminRepository.save(admin);
+        return loginAndGetToken(mockMvc, objectMapper, email, password);
     }
 
     static String bearer(String token) {

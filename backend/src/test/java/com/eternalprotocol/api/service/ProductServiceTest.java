@@ -3,7 +3,9 @@ package com.eternalprotocol.api.service;
 import com.eternalprotocol.api.dto.ProductDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Product;
+import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
+import com.eternalprotocol.api.repository.CartItemRepository;
 import com.eternalprotocol.api.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -26,6 +29,10 @@ class ProductServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+    @Mock
+    private CartItemRepository cartItemRepository;
+    @Mock
+    private ProductImageService productImageService;
 
     @InjectMocks
     private ProductService productService;
@@ -129,9 +136,13 @@ class ProductServiceTest {
     }
 
     @Test
-    void createProduct_savesAndReturnsNewProductWithStyleCode() {
+    void createProduct_noGalleryCoverYet_fallsBackToRequestImageUrl() {
+        // No gallery photos uploaded for this style+colour yet (the normal
+        // case for a brand-new style code) — productImageService returns
+        // empty, so whatever the request explicitly provided is used as-is.
         ProductRequestDto request = new ProductRequestDto(
                 "PROTOCOL-002", "New Tee", new BigDecimal("3000.00"), "White", "L", 20, "img.png", "desc");
+        when(productImageService.getCoverImageUrl("PROTOCOL-002", "White")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             Product p = inv.getArgument(0);
             p.setId(2L);
@@ -144,7 +155,24 @@ class ProductServiceTest {
         assertThat(result.styleCode()).isEqualTo("PROTOCOL-002");
         assertThat(result.name()).isEqualTo("New Tee");
         assertThat(result.colour()).isEqualTo("White");
+        assertThat(result.imageUrl()).isEqualTo("img.png");
         verify(productRepository).save(any(Product.class));
+    }
+
+    @Test
+    void createProduct_galleryAlreadyHasCoverForThisStyleAndColour_usesGalleryCoverInstead() {
+        // Admin uploaded gallery photos and picked a cover for this
+        // style+colour before saving the product row itself — the gallery
+        // cover wins over whatever (if anything) the request passed.
+        ProductRequestDto request = new ProductRequestDto(
+                "PROTOCOL-003", "Cover Test Tee", new BigDecimal("3000.00"), "Black", "M", 10, null, null);
+        when(productImageService.getCoverImageUrl("PROTOCOL-003", "Black"))
+                .thenReturn(Optional.of("https://cloudinary.example.com/gallery-cover.png"));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ProductDto result = productService.createProduct(request);
+
+        assertThat(result.imageUrl()).isEqualTo("https://cloudinary.example.com/gallery-cover.png");
     }
 
     @Test
@@ -152,6 +180,7 @@ class ProductServiceTest {
         ProductRequestDto request = new ProductRequestDto(
                 "PROTOCOL-001-V2", "Updated Tee", new BigDecimal("5000.00"), "Grey", "XL", 10, "img2.png", "desc2");
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        when(productImageService.getCoverImageUrl("PROTOCOL-001-V2", "Grey")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProductDto result = productService.updateProduct(1L, request);
@@ -161,6 +190,7 @@ class ProductServiceTest {
         assertThat(result.price()).isEqualByComparingTo("5000.00");
         assertThat(result.colour()).isEqualTo("Grey");
         assertThat(result.stockQty()).isEqualTo(10);
+        assertThat(result.imageUrl()).isEqualTo("img2.png");
     }
 
     @Test
@@ -174,12 +204,36 @@ class ProductServiceTest {
     }
 
     @Test
-    void deleteProduct_existingProduct_deletesIt() {
+    void deleteProduct_lastSizeForColour_clearsCartItemsAndPurgesGallery() {
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        // No other size rows left for PROTOCOL-001/Black after this delete.
+        when(productRepository.search("PROTOCOL-001", "Black", null)).thenReturn(List.of());
 
         productService.deleteProduct(1L);
 
+        // Cart items must be cleared before the delete, or the FK would block it.
+        verify(cartItemRepository).deleteByProductId(1L);
         verify(productRepository).delete(sampleProduct);
+        verify(productRepository).flush();
+        // Last size for this colour is gone, so its photo gallery (and Cloudinary assets) get purged too.
+        verify(productImageService).deleteAllImagesForStyleAndColour("PROTOCOL-001", "Black");
+    }
+
+    @Test
+    void deleteProduct_otherSizesOfSameColourRemain_leavesGalleryAlone() {
+        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        // A Black/L row (say) still exists after deleting Black/M — the
+        // colour's photos are still in use, so they must not be purged.
+        Product remainingSize = new Product();
+        remainingSize.setId(2L);
+        remainingSize.setStyleCode("PROTOCOL-001");
+        remainingSize.setColour("Black");
+        remainingSize.setSize("L");
+        when(productRepository.search("PROTOCOL-001", "Black", null)).thenReturn(List.of(remainingSize));
+
+        productService.deleteProduct(1L);
+
+        verify(productImageService, never()).deleteAllImagesForStyleAndColour(any(), any());
     }
 
     @Test
@@ -189,5 +243,22 @@ class ProductServiceTest {
         assertThatThrownBy(() -> productService.deleteProduct(404L))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(productRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteProduct_referencedByPastOrder_throwsProductInUseExceptionWithClearMessage() {
+        // Simulates the real-world case: an OrderItem foreign key blocks
+        // the delete at flush time. This should surface as a clear,
+        // actionable message instead of a raw DB error.
+        when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
+        doThrow(new DataIntegrityViolationException("FK violation")).when(productRepository).flush();
+
+        assertThatThrownBy(() -> productService.deleteProduct(1L))
+                .isInstanceOf(ProductInUseException.class)
+                .hasMessageContaining("past orders");
+
+        verify(cartItemRepository).deleteByProductId(1L);
+        // The delete never actually succeeded, so the gallery must be untouched.
+        verify(productImageService, never()).deleteAllImagesForStyleAndColour(any(), any());
     }
 }

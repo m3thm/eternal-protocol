@@ -1,11 +1,13 @@
 package com.eternalprotocol.api.integration;
 
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,10 @@ class SecurityConfigTest {
     private MockMvc mockMvc;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private AdminRepository adminRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Test
     void protectedRoute_noAuthorizationHeaderAtAll_returns401WithConsistentErrorShape() throws Exception {
@@ -62,7 +68,8 @@ class SecurityConfigTest {
 
     @Test
     void protectedRoute_validTokenCorrectRole_succeeds() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder,
+                "security.correctrole@example.com", "adminpass123");
 
         mockMvc.perform(get("/api/admin/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { productsApi } from '@/api/products'
 import { useToastStore } from '@/stores/toast'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { FormInput, FormTextarea } from '@/components/ui/FormField'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Price } from '@/components/ui/Price'
+import { FaCloudArrowUp, FaStar } from 'react-icons/fa6'
 import type { ProductDto, ProductImageDto, ProductInput } from '@/types'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -20,7 +21,6 @@ const emptyForm: ProductInput = {
   colour: '',
   size: '',
   stockQty: 0,
-  imageUrl: '',
   description: '',
 }
 
@@ -124,13 +124,11 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
           colour: product.colour,
           size: product.size,
           stockQty: product.stockQty,
-          imageUrl: product.imageUrl ?? '',
           description: product.description ?? '',
         }
       : emptyForm,
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   const saveMutation = useMutation({
     mutationFn: (input: ProductInput) => (product ? productsApi.update(product.id, input) : productsApi.create(input)),
@@ -141,32 +139,6 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
     },
     onError: (err) => pushToast(getErrorMessage(err), 'error'),
   })
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => productsApi.uploadImage(file, setUploadProgress),
-    onSuccess: (res) => {
-      setForm((f) => ({ ...f, imageUrl: res.imageUrl }))
-      setUploadProgress(null)
-    },
-    onError: (err) => {
-      pushToast(getErrorMessage(err, 'Image upload failed'), 'error')
-      setUploadProgress(null)
-    },
-  })
-
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      pushToast('Please choose a JPEG, PNG, WebP, or GIF image.', 'error')
-      return
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      pushToast('Image must be 5MB or smaller.', 'error')
-      return
-    }
-    uploadMutation.mutate(file)
-  }
 
   function validate(): boolean {
     const next: Record<string, string> = {}
@@ -244,27 +216,13 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
           />
         </div>
 
-        <div className="mt-4">
-          <span className="mb-1.5 block text-xs uppercase tracking-widest text-ep-muted">Product image</span>
-          <div className="flex items-center gap-4">
-            {form.imageUrl && (
-              <div className="h-16 w-14 overflow-hidden bg-ep-surface-2">
-                <img src={form.imageUrl} alt="" className="h-full w-full object-cover" />
-              </div>
-            )}
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFileSelect} className="text-sm text-ep-muted" />
-          </div>
-          {uploadProgress !== null && <p className="mt-1 text-xs text-ep-muted">Uploading… {uploadProgress}%</p>}
-          <p className="mt-1 text-xs text-ep-muted">
-            This is the cover photo shown on the shop grid. It's kept in sync with the first photo below automatically.
-          </p>
-        </div>
-
         <div className="mt-6">
           {form.styleCode.trim() && form.colour.trim() ? (
             <ProductGalleryEditor styleCode={form.styleCode.trim()} colour={form.colour.trim()} />
           ) : (
-            <p className="text-xs text-ep-muted">Enter a style code and colour to manage this colour's photo gallery.</p>
+            <p className="text-xs text-ep-muted">
+              Enter a style code and colour above, then upload this colour's photos here.
+            </p>
           )}
         </div>
 
@@ -272,7 +230,7 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" loading={saveMutation.isPending} disabled={uploadMutation.isPending}>
+          <Button type="submit" loading={saveMutation.isPending}>
             {product ? 'Save changes' : 'Create product'}
           </Button>
         </div>
@@ -293,7 +251,10 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
 function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour: string }) {
   const queryClient = useQueryClient()
   const pushToast = useToastStore((s) => s.push)
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  // Batch upload progress: how many of the files picked in this drop/select have finished so far.
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null)
 
   const galleryKey = ['product-images', styleCode]
 
@@ -308,23 +269,14 @@ function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: galleryKey })
 
-  const addMutation = useMutation({
-    mutationFn: (file: File) =>
-      productsApi
-        .uploadImage(file, setUploadProgress)
-        .then((res) => productsApi.addImage(styleCode, { colour, imageUrl: res.imageUrl })),
-    onSuccess: () => {
-      invalidate()
-      setUploadProgress(null)
-    },
-    onError: (err) => {
-      pushToast(getErrorMessage(err, 'Image upload failed'), 'error')
-      setUploadProgress(null)
-    },
-  })
-
   const removeMutation = useMutation({
     mutationFn: (imageId: number) => productsApi.removeImage(imageId),
+    onSuccess: invalidate,
+    onError: (err) => pushToast(getErrorMessage(err), 'error'),
+  })
+
+  const setCoverMutation = useMutation({
+    mutationFn: (imageId: number) => productsApi.setCoverImage(imageId),
     onSuccess: invalidate,
     onError: (err) => pushToast(getErrorMessage(err), 'error'),
   })
@@ -335,19 +287,50 @@ function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour
     onError: (err) => pushToast(getErrorMessage(err), 'error'),
   })
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  function validFile(file: File): boolean {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      pushToast('Please choose a JPEG, PNG, WebP, or GIF image.', 'error')
-      return
+      pushToast(`${file.name}: only JPEG, PNG, WebP, or GIF images are allowed.`, 'error')
+      return false
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      pushToast('Image must be 5MB or smaller.', 'error')
-      return
+      pushToast(`${file.name}: image must be 5MB or smaller.`, 'error')
+      return false
     }
-    addMutation.mutate(file)
+    return true
+  }
+
+  /** Uploads every valid file in the batch, one at a time, so the progress counter is meaningful. */
+  async function uploadBatch(fileList: FileList | File[]) {
+    const files = Array.from(fileList).filter(validFile)
+    if (files.length === 0) return
+
+    setBatch({ done: 0, total: files.length })
+    for (const file of files) {
+      try {
+        const uploaded = await productsApi.uploadImage(file)
+        await productsApi.addImage(styleCode, {
+          colour,
+          imageUrl: uploaded.imageUrl,
+          publicId: uploaded.publicId,
+        })
+      } catch (err) {
+        pushToast(getErrorMessage(err, `Failed to upload ${file.name}`), 'error')
+      }
+      setBatch((b) => (b ? { ...b, done: b.done + 1 } : b))
+    }
+    setBatch(null)
+    invalidate()
+  }
+
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) uploadBatch(e.target.files)
     e.target.value = ''
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files?.length) uploadBatch(e.dataTransfer.files)
   }
 
   function move(index: number, direction: -1 | 1) {
@@ -363,19 +346,25 @@ function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour
       <span className="mb-1.5 block text-xs uppercase tracking-widest text-ep-muted">
         Photo gallery — {colour} (all sizes)
       </span>
+      <p className="mb-3 text-xs text-ep-muted">
+        Upload this colour's photos once here, then pick one as the cover shown on the shop grid.
+      </p>
 
       {isLoading ? (
         <p className="text-xs text-ep-muted">Loading gallery…</p>
-      ) : images.length === 0 ? (
-        <p className="text-xs text-ep-muted">No photos yet for this colour.</p>
-      ) : (
-        <div className="flex flex-wrap gap-3">
+      ) : images.length > 0 ? (
+        <div className="mb-4 flex flex-wrap gap-3">
           {images.map((img: ProductImageDto, i: number) => (
-            <div key={img.id} className="relative">
-              <div className="h-20 w-16 overflow-hidden bg-ep-surface-2">
+            <div key={img.id} className="group relative">
+              <div className="relative h-24 w-20 overflow-hidden bg-ep-surface-2">
                 <img src={img.imageUrl} alt="" className="h-full w-full object-cover" />
+                {img.isCover && (
+                  <span className="absolute left-1 top-1 flex items-center gap-1 bg-ep-black/70 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-ep-bone">
+                    <FaStar className="h-2 w-2" /> Cover
+                  </span>
+                )}
               </div>
-              <div className="mt-1 flex items-center justify-center gap-1">
+              <div className="mt-1 flex items-center justify-center gap-1.5">
                 <button
                   type="button"
                   disabled={i === 0}
@@ -385,6 +374,17 @@ function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour
                 >
                   ←
                 </button>
+                {!img.isCover && (
+                  <button
+                    type="button"
+                    onClick={() => setCoverMutation.mutate(img.id)}
+                    className="text-[10px] text-ep-muted hover:text-ep-bone"
+                    aria-label="Set as cover photo"
+                    title="Set as cover"
+                  >
+                    <FaStar className="h-2.5 w-2.5" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => removeMutation.mutate(img.id)}
@@ -406,17 +406,42 @@ function ProductGalleryEditor({ styleCode, colour }: { styleCode: string; colour
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
-      <div className="mt-3">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragging(true)
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-2 border border-dashed px-6 py-8 text-center transition-colors ${
+          isDragging ? 'border-ep-bone bg-ep-surface-2' : 'border-ep-border hover:border-ep-muted'
+        }`}
+      >
+        <FaCloudArrowUp className="h-6 w-6 text-ep-muted" />
+        <p className="text-sm text-ep-bone">
+          <span className="underline">Click to upload</span> or drag photos here
+        </p>
+        <p className="text-xs text-ep-muted">JPEG, PNG, WebP, or GIF — up to 5MB each. You can select several at once.</p>
         <input
+          ref={fileInputRef}
           type="file"
+          multiple
           accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={handleFileSelect}
-          className="text-sm text-ep-muted"
+          onChange={handleFileInputChange}
+          className="hidden"
         />
-        {uploadProgress !== null && <p className="mt-1 text-xs text-ep-muted">Uploading… {uploadProgress}%</p>}
       </div>
+      {batch && (
+        <p className="mt-2 text-xs text-ep-muted">
+          Uploading photo {Math.min(batch.done + 1, batch.total)} of {batch.total}…
+        </p>
+      )}
     </div>
   )
 }

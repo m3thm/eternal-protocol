@@ -4,5 +4,6 @@ public record ProductImageDto(
         Long id,
         String colour,
         String imageUrl,
-        Integer sortOrder
+        Integer sortOrder,
+        boolean isCover
 ) {}

@@ -3,6 +3,7 @@ package com.eternalprotocol.api.integration;
 import com.eternalprotocol.api.dto.OrderRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Athlete;
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.eternalprotocol.api.repository.AthleteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ class AthleteIntegrationTest {
     @Autowired
     private AthleteRepository athleteRepository;
     @Autowired
+    private AdminRepository adminRepository;
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private Athlete seedAthlete(String code, String email, String discountPercent) {
@@ -47,7 +50,8 @@ class AthleteIntegrationTest {
     }
 
     private Long createTestProduct() throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder,
+                "athlete.test.admin@example.com", "adminpass123");
         ProductRequestDto request = new ProductRequestDto(
                 "ATHLETE-TEST", "Athlete Test Tee", new BigDecimal("4500.00"), "Black", "M", 20, null, null);
         String response = mockMvc.perform(post("/api/products")

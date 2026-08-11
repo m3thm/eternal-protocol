@@ -43,6 +43,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(ProductInUseException.class)
+    public ResponseEntity<Map<String, Object>> handleProductInUse(ProductInUseException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     @ExceptionHandler(ImageUploadException.class)
     public ResponseEntity<Map<String, Object>> handleImageUpload(ImageUploadException ex) {
         // 502: our server is fine, the upstream service (Cloudinary) is the one that failed.
@@ -56,6 +61,16 @@ public class GlobalExceptionHandler {
         // before it ever reaches ImageUploadService's own 5MB check — same
         // message, just caught one layer earlier.
         return build(HttpStatus.BAD_REQUEST, "Image must be smaller than 5MB");
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        // Fallback for any other endpoint that hits a foreign-key/unique
+        // constraint without its own specific handler (see ProductService's
+        // deleteProduct for the one place this is caught with a tailored
+        // message instead). Still a client-side "can't do that" — 409, not 500.
+        return build(HttpStatus.CONFLICT, "This action conflicts with existing related data and can't be completed.");
     }
 
     @ExceptionHandler(AccessDeniedException.class)

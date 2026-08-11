@@ -66,3 +66,12 @@ app:
     merchant-id: ${PAYHERE_MERCHANT_ID}
     merchant-secret: ${PAYHERE_MERCHANT_SECRET}
     checkout-url: https://sandbox.payhere.lk/pay/checkout
+
+  admin:
+    # One-time bootstrap: on startup, if the admins table is still empty AND
+    # both of these are set, one admin account is created from them — this
+    # is how you get your first login without ever hardcoding a password in
+    # source. Leave both unset (or blank) and no admin is auto-created; see
+    # README.md for how to promote an admin manually instead.
+    bootstrap-email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    bootstrap-password: ${ADMIN_BOOTSTRAP_PASSWORD:}

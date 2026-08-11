@@ -64,17 +64,17 @@ public class ProductController {
 
     /**
      * Admin only. Uploads a product image to Cloudinary and returns its
-     * public URL — the frontend then includes that URL as `imageUrl` in a
-     * create or update product request. Deliberately a separate step
-     * rather than baked into create/update: it lets the admin see the
-     * uploaded image before submitting the rest of the form, and keeps
-     * the (potentially large, binary) upload request separate from the
-     * (small, JSON) product-details request.
+     * public URL plus its Cloudinary public_id — the frontend then attaches
+     * both to a style+colour's gallery via POST .../images. Deliberately a
+     * separate step rather than baked into create/update: it lets the admin
+     * see the uploaded image before submitting the rest of the form, and
+     * keeps the (potentially large, binary) upload request separate from
+     * the (small, JSON) product-details request.
      */
     @PostMapping(value = "/upload-image", consumes = "multipart/form-data")
     public ResponseEntity<ImageUploadResponseDto> uploadImage(@RequestParam("file") MultipartFile file) {
-        String imageUrl = imageUploadService.uploadProductImage(file);
-        return ResponseEntity.ok(new ImageUploadResponseDto(imageUrl));
+        ImageUploadService.UploadResult result = imageUploadService.uploadProductImage(file);
+        return ResponseEntity.ok(new ImageUploadResponseDto(result.url(), result.publicId()));
     }
 
     // ---- Product image gallery (multiple images per style+colour, for the PDP carousel) ----
@@ -89,8 +89,10 @@ public class ProductController {
     }
 
     /**
-     * Admin only. Call /api/products/upload-image first to get the imageUrl,
-     * then attach it to this style+colour's gallery with this endpoint.
+     * Admin only. Call /api/products/upload-image first to get the imageUrl
+     * (and publicId), then attach it to this style+colour's gallery with
+     * this endpoint. The cover photo for a product now comes from here —
+     * see setCoverImage — rather than a separate manual upload.
      */
     @PostMapping("/style/{styleCode}/images")
     public ResponseEntity<ProductImageDto> addImage(@PathVariable String styleCode,
@@ -99,10 +101,22 @@ public class ProductController {
     }
 
     // Admin only — locked down in SecurityConfig alongside the other DELETE /api/products/** rules.
+    // Also deletes the underlying Cloudinary asset (see ProductImageService.deleteImage).
     @DeleteMapping("/images/{imageId}")
     public ResponseEntity<Void> deleteImage(@PathVariable Long imageId) {
         productImageService.deleteImage(imageId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Admin only. Marks this gallery image as the cover for its style+colour
+     * — the photo shown on the shop grid and as the PDP carousel's first
+     * frame. Replaces the old separate "upload a cover photo" flow: the
+     * cover is just one of the gallery photos, chosen here.
+     */
+    @PutMapping("/images/{imageId}/cover")
+    public ResponseEntity<ProductImageDto> setCoverImage(@PathVariable Long imageId) {
+        return ResponseEntity.ok(productImageService.setCoverImage(imageId));
     }
 
     /** Admin only. Body is the full list of image IDs for this colour, in the new order. */

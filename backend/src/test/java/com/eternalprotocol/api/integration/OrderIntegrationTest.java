@@ -4,6 +4,7 @@ import com.eternalprotocol.api.dto.OrderItemRequestDto;
 import com.eternalprotocol.api.dto.OrderRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Athlete;
+import com.eternalprotocol.api.repository.AdminRepository;
 import com.eternalprotocol.api.repository.AthleteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -35,11 +36,27 @@ class OrderIntegrationTest {
     @Autowired
     private AthleteRepository athleteRepository;
     @Autowired
+    private AdminRepository adminRepository;
+    @Autowired
     private PasswordEncoder passwordEncoder;
+
+    // JUnit creates a fresh test instance per @Test method, so caching this
+    // here is enough to keep createTestProduct's repeated admin logins
+    // (some tests create two+ products) from trying to insert the same
+    // admin email twice within one transaction.
+    private String cachedAdminToken;
+
+    private String adminToken() throws Exception {
+        if (cachedAdminToken == null) {
+            cachedAdminToken = createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder,
+                    "order.integration.admin@example.com", "adminpass123");
+        }
+        return cachedAdminToken;
+    }
 
     /** Creates a fresh product via the admin endpoint so tests don't fight over stock on the seeded one. */
     private Long createTestProduct(String styleCode, String name, BigDecimal price, int stockQty) throws Exception {
-        String adminToken = loginAndGetToken(mockMvc, objectMapper, "admin@eternalprotocol.com", "admin123");
+        String adminToken = adminToken();
         ProductRequestDto request = new ProductRequestDto(
                 styleCode, name, price, "Black", "M", stockQty, null, null);
 

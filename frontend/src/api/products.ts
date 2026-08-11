@@ -49,6 +49,10 @@ export const productsApi = {
 
   removeImage: (imageId: number) => apiClient.delete(`/api/products/images/${imageId}`),
 
+  /** Marks this gallery photo as the cover — the one shown on the shop grid and as the PDP's first frame. */
+  setCoverImage: (imageId: number) =>
+    apiClient.put<ProductImageDto>(`/api/products/images/${imageId}/cover`).then((r) => r.data),
+
   reorderImages: (styleCode: string, colour: string, orderedImageIds: number[]) =>
     apiClient
       .put<ProductImageDto[]>(`/api/products/style/${styleCode}/images/reorder`, { orderedImageIds }, {

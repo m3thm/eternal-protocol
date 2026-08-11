@@ -93,16 +93,45 @@ lets two genuinely different products share a name if that ever comes up.
 **Validation:** `styleCode`/`name`/`colour`/`size` required and non-blank;
 `price` required and must be `> 0`; `stockQty` required and must be `>= 0`;
 `imageUrl`/`description` optional.
+**[UPDATED] `imageUrl` is normally derived automatically, not sent by the
+admin UI.** If this style+colour already has a photo gallery (see below)
+with a cover photo set, `imageUrl` on the saved `Product` row is
+overwritten with that cover photo's URL regardless of what's in the
+request body. The request-supplied `imageUrl` is only used as a fallback
+when no gallery cover exists yet for that style+colour (e.g. an older API
+caller, or a product saved before any gallery photos were uploaded for its
+colour). This replaced an earlier design where the cover photo was
+uploaded as a separate, disconnected field from the gallery — which made
+it impossible to reuse one uploaded photo as both the cover and a gallery
+entry without uploading it twice.
 **Response:** `200` — the created `ProductDto`. `400` on validation failure.
 
 ### `PUT /api/products/{id}`
 **Access:** `ADMIN`
-Same request/validation shape as create. Full replace of all fields.
+Same request/validation shape as create, including the `imageUrl`
+gallery-cover-wins behavior described above. Full replace of all fields.
 **Response:** `200` — updated `ProductDto`, or `404` if the product doesn't exist.
 
 ### `DELETE /api/products/{id}`
 **Access:** `ADMIN`
-**Response:** `204 No Content`, or `404` if the product doesn't exist.
+**[UPDATED]** Deleting a `Product` row (one size+colour combination) also:
+- Clears any live shopping-cart entries referencing it first (`CartItem`
+  has a foreign key to `Product`; carts are just in-progress shopper
+  state, so this is safe to clear rather than block on).
+- If this was the *last* remaining size for its style+colour, purges that
+  colour's entire photo gallery — both the `ProductImage` rows and their
+  underlying Cloudinary assets (see `[NEW] Product Image Gallery` below).
+  If other sizes of the same colour still exist, the gallery is left
+  alone since they still display it.
+
+If the product appears in any **past order** (`OrderItem` foreign key),
+the delete is refused with `409 Conflict` and a message naming the product
+and suggesting the admin set its stock to `0` instead — hard-deleting a
+product that was actually sold would either be blocked by the database's
+foreign-key constraint or, if forced through, silently corrupt what a
+customer actually paid for.
+**Response:** `204 No Content` on success, `404` if the product doesn't
+exist, `409` if it's referenced by a past order.
 
 ### `[NEW] POST /api/products/upload-image`
 **Access:** `ADMIN`
@@ -111,23 +140,82 @@ Same request/validation shape as create. Full replace of all fields.
 `imageUrl` was just a string field with no upload mechanism behind it. This
 endpoint fills that gap: it accepts a `multipart/form-data` file upload
 (field name `file`), uploads it to Cloudinary, and returns Cloudinary's
-public HTTPS URL. The frontend calls this first, gets a URL back, then
-includes that URL as `imageUrl` in a subsequent `POST`/`PUT /api/products`
-call — the actual image bytes never touch this backend's own database or
-disk; Cloudinary is the permanent store.
+public HTTPS URL **and** its `public_id`. The frontend calls this first to
+get both back, then attaches them to a style+colour's photo gallery via
+`POST /api/products/style/{styleCode}/images` below — the actual image
+bytes never touch this backend's own database or disk; Cloudinary is the
+permanent store. The `public_id` is kept (on the `ProductImage` row) purely
+so a later delete can remove the exact Cloudinary asset instead of trying
+to reverse-engineer one out of the URL string.
 
 **Request:** `multipart/form-data`, field `file`.
 **Validation:** file must be present and non-empty; must be `≤ 5MB`; must
 be one of `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
 **Response:** `200`:
 ```json
-{ "imageUrl": "https://res.cloudinary.com/<cloud>/image/upload/v.../eternal-protocol/products/xyz.png" }
+{ "imageUrl": "https://res.cloudinary.com/<cloud>/image/upload/v.../eternal-protocol/products/xyz.png",
+  "publicId": "eternal-protocol/products/xyz" }
 ```
 `400` on validation failure (wrong type, too large, missing file) or if the
 request exceeds the server's multipart size limit (5MB, configured in
 `application.yml`). `502 Bad Gateway` if Cloudinary itself is unreachable
 or rejects the upload — distinguished from a `400` because in that case the
 request was valid but the upstream service failed, not the caller's fault.
+
+### `[NEW] Product Image Gallery`
+**Not present in the original spec.** Each style+colour combination can
+have multiple photos (a real product-page carousel — "different angles of
+the same Black tee" — rather than one static image), with one of them
+designated the cover photo shown on the shop grid. Photos are keyed on
+`(styleCode, colour)` rather than on an individual `Product` row: a
+style+colour can have several `Product` rows (one per size), and all of
+them share the same photos, so uploading once here covers every size.
+
+**`GET /api/products/style/{styleCode}/images`**
+**Access:** Public.
+Every photo for every colour of this style, ordered by colour then by
+carousel position. Response: `200` — array of:
+```json
+{ "id": 1, "colour": "Black", "imageUrl": "...", "sortOrder": 0, "isCover": true }
+```
+The frontend groups this flat list by `colour` client-side (e.g. for the
+product-detail-page carousel, which swaps its whole image set when the
+shopper picks a different colour).
+
+**`POST /api/products/style/{styleCode}/images`**
+**Access:** `ADMIN`. Call `/api/products/upload-image` first to get
+`imageUrl`/`publicId`, then attach it here.
+**Request body:** `{ "colour": "Black", "imageUrl": "...", "publicId": "...", "sortOrder": 0 }`
+(`publicId` and `sortOrder` optional — `sortOrder` defaults to "append to
+the end of this colour's gallery"). **The first photo uploaded for a new
+colour is automatically marked as its cover** (`isCover: true`); the admin
+can change this afterward via the cover endpoint below.
+**Response:** `200` — the created `ProductImageDto`.
+
+**`PUT /api/products/images/{imageId}/cover`**
+**Access:** `ADMIN`.
+Marks this gallery photo as the cover for its style+colour — the one shown
+as `Product.imageUrl` on the shop grid and as the PDP carousel's first
+frame — un-marking whichever photo held that role before (exactly one
+cover per style+colour at all times). This is how an admin picks the cover
+from photos already in the gallery, rather than uploading a separate,
+disconnected "cover photo".
+**Response:** `200` — the updated `ProductImageDto`.
+
+**`DELETE /api/products/images/{imageId}`**
+**Access:** `ADMIN`.
+Deletes the gallery row **and** its underlying Cloudinary asset (via
+`public_id`) — a photo removed from the gallery doesn't linger in
+Cloudinary storage/bandwidth quota for no reason. If the deleted photo was
+the cover, the next photo in carousel order is automatically promoted to
+cover so the colour is never left with photos but no cover.
+**Response:** `204 No Content`.
+
+**`PUT /api/products/style/{styleCode}/images/reorder`**
+**Access:** `ADMIN`. Query param: `colour`.
+**Request body:** `{ "orderedImageIds": [3, 1, 2] }` — every image ID for
+that colour, in the new desired carousel order.
+**Response:** `200` — the updated `ProductImageDto[]` in the new order.
 
 ---
 
@@ -499,6 +587,10 @@ above.
 | 10 | `return_url`/`cancel_url` are now built per-order (like `notify_url`), both routing to one shared frontend confirmation page distinguished by a `status` query param | Originally these were static config values with no order ID attached at all — the frontend had no way to know which order a PayHere redirect was even about |
 | 11 | **[BREAKING]** `Order` restructured from one-product-per-order to a multi-item model (`items: List<OrderItem>`); `POST /api/orders` request/response and every read DTO that includes order data (`OrderDetailDto`, `AdminOrderDto`, `AthleteOrderSummaryDto`) changed shape accordingly | The single-item model made it structurally impossible to check out a multi-product cart as one order/one payment — a cart with 2 tees + 1 hoodie could only become 3 separate PayHere payments. Fixed at the schema level rather than papered over in the frontend, per explicit direction |
 | 12 | Added `@Transactional(readOnly = true)` to every read-path service method that maps an entity with LAZY associations to a DTO (`OrderService`, `AthleteService`, `CartService`) | Pre-existing latent bug, not something introduced by item #11 — but the multi-item change made it certain to surface, since `Order.items` is a `@OneToMany` collection and those are *always* LAZY. Without this, these endpoints work fine under test (Spring's test transaction happens to keep the JPA session open) but throw `LazyInitializationException` against real, unwrapped HTTP traffic from an actual frontend |
+| 13 | Removed the startup `DataSeeder` (hardcoded admin login + one sample product); replaced with `AdminBootstrap`, which creates exactly one admin from `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD` in `.env`, only while the `admins` table is still empty | A hardcoded `admin@eternalprotocol.com` / `admin123` login is fine for a disposable in-memory H2 demo, but not something that should sit in source control once the app is running against a real, persistent MySQL database other people can reach |
+| 14 | `DELETE /api/products/{id}` now clears the product's live cart entries first, and refuses the delete with `409` + a clear message if the product is referenced by a past order, instead of failing with a raw 500 | `CartItem` and `OrderItem` both have a foreign key to `Product` with no cascade rule (MySQL default: `RESTRICT`); deleting a product that had ever been ordered previously surfaced as an opaque "Something went wrong" 500 with no indication of the actual cause |
+| 15 | **[NEW]** Product photo gallery (`ProductImage` entity + `/api/products/style/{styleCode}/images` endpoints), with an explicit per-style+colour cover photo (`PUT /api/products/images/{imageId}/cover`) chosen from the gallery rather than uploaded separately | The original design had one `imageUrl` per `Product` row (so effectively per size, duplicated across sizes of the same colour) with no way to show multiple angles of the same item, and the shop-grid cover photo had to be uploaded as a disconnected second copy of a photo already in the gallery if the admin wanted to reuse it |
+| 16 | `DELETE /api/products/images/{imageId}` (and the cascading gallery purge on `DELETE /api/products/{id}` — see #14) now also deletes the underlying Cloudinary asset via its stored `public_id`, not just the DB row | Removing a photo from the gallery previously left it sitting in Cloudinary indefinitely, silently consuming storage/bandwidth quota for assets nothing in the app referenced any more |
 
 No endpoint, business rule, or access-control requirement listed in the
 original `Full_Functionality_Spec.md` was omitted, weakened, or altered in

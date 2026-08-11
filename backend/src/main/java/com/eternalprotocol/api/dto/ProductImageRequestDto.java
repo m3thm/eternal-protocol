@@ -11,5 +11,6 @@ import jakarta.validation.constraints.NotBlank;
 public record ProductImageRequestDto(
         @NotBlank(message = "Colour is required") String colour,
         @NotBlank(message = "Image URL is required") String imageUrl,
+        String publicId,
         Integer sortOrder
 ) {}
