@@ -36,6 +36,28 @@ public class Product {
     @Column(nullable = false)
     private String name;
 
+    /**
+     * One of the three fixed top-level sections (see {@link ProductCategory}).
+     * Nullable at the DB level — despite being effectively required by the
+     * time a product is created via the API (see ProductRequestDto) —
+     * purely so adding this column via `ddl-auto: update` doesn't fail
+     * against a MySQL table that already has rows with no value to
+     * backfill. New rows always have one going forward.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category")
+    private ProductCategory category;
+
+    /**
+     * Free text set by the admin (e.g. "T-Shirts", "Hoodies", "Caps",
+     * "Bags") — unlike category this isn't a fixed set, since the brand
+     * will add new subcategories over time. The navbar's per-category
+     * dropdown is populated from whatever distinct values actually exist
+     * for that category, the same way colour/size filter options work.
+     */
+    @Column(name = "sub_category")
+    private String subCategory;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 

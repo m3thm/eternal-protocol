@@ -1,43 +1,82 @@
+import { useMemo, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { FaChevronDown, FaSliders } from 'react-icons/fa6'
 import { productsApi } from '@/api/products'
 import { ProductCard } from '@/components/ui/ProductCard'
-import { groupByStyle } from './groupByStyle'
+import { useClickOutside } from '@/lib/useClickOutside'
+import { categoryFromSlug, labelForCategory } from '@/lib/categories'
+import { groupByStyle, sortStyles, SORT_OPTIONS, type SortKey } from './groupByStyle'
 
 export function ShopPage() {
+  const { categorySlug } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // An unrecognized slug (typo'd URL, old bookmark) just falls back to no
+  // category filter rather than a hard 404 — the shop still works, it's
+  // just unscoped, which is a softer failure than an error page.
+  const category = categoryFromSlug(categorySlug)
+  const subCategory = searchParams.get('subCategory') ?? undefined
   const colour = searchParams.get('colour') ?? undefined
   const size = searchParams.get('size') ?? undefined
+  const sort = (searchParams.get('sort') as SortKey | null) ?? undefined
 
   const { data: products, isLoading, isError } = useQuery({
-    queryKey: ['products', { colour, size }],
-    queryFn: () => productsApi.list({ colour, size }),
+    queryKey: ['products', { category, subCategory, colour, size }],
+    queryFn: () => productsApi.list({ category, subCategory, colour, size }),
   })
 
-  // Unfiltered fetch so filter pill options don't shrink as filters are applied.
-  const { data: allProducts } = useQuery({
-    queryKey: ['products', 'all'],
-    queryFn: () => productsApi.list(),
+  // Fetched without colour/size (but still scoped to category/subCategory)
+  // so the Filter dropdown's colour/size options don't shrink to just
+  // what's left after a filter is already applied.
+  const { data: unfilteredProducts } = useQuery({
+    queryKey: ['products', 'unfiltered', { category, subCategory }],
+    queryFn: () => productsApi.list({ category, subCategory }),
   })
-  const availableColours = Array.from(new Set((allProducts ?? []).map((p) => p.colour))).sort()
-  const availableSizes = Array.from(new Set((allProducts ?? []).map((p) => p.size))).sort()
+  const availableColours = useMemo(
+    () => Array.from(new Set((unfilteredProducts ?? []).map((p) => p.colour))).sort(),
+    [unfilteredProducts],
+  )
+  const availableSizes = useMemo(
+    () => Array.from(new Set((unfilteredProducts ?? []).map((p) => p.size))).sort(),
+    [unfilteredProducts],
+  )
 
-  function setFilter(key: 'colour' | 'size', value: string | undefined) {
+  function setParam(key: string, value: string | undefined) {
     const next = new URLSearchParams(searchParams)
     if (value) next.set(key, value)
     else next.delete(key)
     setSearchParams(next)
   }
 
-  const styles = products ? groupByStyle(products) : []
+  function clearFilters() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('colour')
+    next.delete('size')
+    setSearchParams(next)
+  }
+
+  const styles = products ? sortStyles(groupByStyle(products), sort) : []
+  const activeFilterCount = [colour, size].filter(Boolean).length
+
+  const heading = subCategory ?? labelForCategory(category)
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      <h1 className="font-display text-4xl">Shop</h1>
+      <h1 className="font-display text-4xl">{heading}</h1>
 
-      <div className="mt-6 flex flex-wrap gap-6 border-b border-ep-border pb-6">
-        <FilterGroup label="Colour" options={availableColours} active={colour} onChange={(v) => setFilter('colour', v)} />
-        <FilterGroup label="Size" options={availableSizes} active={size} onChange={(v) => setFilter('size', v)} />
+      <div className="mt-6 flex items-center justify-between border-b border-ep-border pb-6">
+        <FilterDropdown
+          availableColours={availableColours}
+          availableSizes={availableSizes}
+          colour={colour}
+          size={size}
+          activeCount={activeFilterCount}
+          onChangeColour={(v) => setParam('colour', v)}
+          onChangeSize={(v) => setParam('size', v)}
+          onClear={clearFilters}
+        />
+        <SortDropdown sort={sort} onChange={(v) => setParam('sort', v)} />
       </div>
 
       {isLoading && <p className="mt-10 text-sm text-ep-muted">Loading products…</p>}
@@ -55,7 +94,78 @@ export function ShopPage() {
   )
 }
 
-function FilterGroup({
+function FilterDropdown({
+  availableColours,
+  availableSizes,
+  colour,
+  size,
+  activeCount,
+  onChangeColour,
+  onChangeSize,
+  onClear,
+}: {
+  availableColours: string[]
+  availableSizes: string[]
+  colour?: string
+  size?: string
+  activeCount: number
+  onChangeColour: (value: string | undefined) => void
+  onChangeSize: (value: string | undefined) => void
+  onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useClickOutside<HTMLDivElement>(() => setOpen(false), open)
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-2 border border-ep-border px-4 py-2 text-xs uppercase tracking-widest text-ep-bone transition-colors hover:border-ep-bone"
+      >
+        <FaSliders className="h-3 w-3" />
+        Filter
+        {activeCount > 0 && (
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ep-bone text-[10px] text-ep-black">
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-3 w-72 border border-ep-border bg-ep-black/95 p-5 backdrop-blur-md">
+          <FilterSection
+            label="Colour"
+            options={availableColours}
+            active={colour}
+            onChange={onChangeColour}
+          />
+          <FilterSection
+            label="Size"
+            options={availableSizes}
+            active={size}
+            onChange={onChangeSize}
+          />
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onClear()
+                setOpen(false)
+              }}
+              className="mt-1 text-xs uppercase tracking-widest text-ep-muted underline hover:text-ep-bone"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FilterSection({
   label,
   options,
   active,
@@ -66,40 +176,78 @@ function FilterGroup({
   active?: string
   onChange: (value: string | undefined) => void
 }) {
+  if (options.length === 0) return null
   return (
-    <div>
+    <div className="mb-5 last:mb-4">
       <div className="mb-2 text-xs uppercase tracking-widest text-ep-muted">{label}</div>
       <div className="flex flex-wrap gap-2">
-        <FilterPill selected={!active} onClick={() => onChange(undefined)}>
-          All
-        </FilterPill>
         {options.map((opt) => (
-          <FilterPill key={opt} selected={active === opt} onClick={() => onChange(active === opt ? undefined : opt)}>
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(active === opt ? undefined : opt)}
+            className={`border px-3 py-1.5 text-xs uppercase tracking-wide transition-colors ${
+              active === opt
+                ? 'border-ep-bone bg-ep-bone text-ep-black'
+                : 'border-ep-border text-ep-muted hover:border-ep-bone hover:text-ep-bone'
+            }`}
+          >
             {opt}
-          </FilterPill>
+          </button>
         ))}
       </div>
     </div>
   )
 }
 
-function FilterPill({
-  children,
-  selected,
-  onClick,
-}: {
-  children: string
-  selected: boolean
-  onClick: () => void
-}) {
+function SortDropdown({ sort, onChange }: { sort?: SortKey; onChange: (value: SortKey | undefined) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useClickOutside<HTMLDivElement>(() => setOpen(false), open)
+  const activeLabel = SORT_OPTIONS.find((o) => o.key === sort)?.label
+
   return (
-    <button
-      onClick={onClick}
-      className={`border px-3 py-1.5 text-xs uppercase tracking-wide transition-colors ${
-        selected ? 'border-ep-bone bg-ep-bone text-ep-black' : 'border-ep-border text-ep-muted hover:border-ep-bone hover:text-ep-bone'
-      }`}
-    >
-      {children}
-    </button>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-2 border border-ep-border px-4 py-2 text-xs uppercase tracking-widest text-ep-bone transition-colors hover:border-ep-bone"
+      >
+        Sort{activeLabel ? `: ${activeLabel}` : ''}
+        <FaChevronDown className={`h-2.5 w-2.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-3 w-56 border border-ep-border bg-ep-black/95 py-2 backdrop-blur-md">
+          <button
+            type="button"
+            onClick={() => {
+              onChange(undefined)
+              setOpen(false)
+            }}
+            className={`block w-full px-4 py-2 text-left text-xs uppercase tracking-widest hover:bg-ep-surface ${
+              !sort ? 'text-ep-bone' : 'text-ep-muted hover:text-ep-bone'
+            }`}
+          >
+            Featured
+          </button>
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => {
+                onChange(opt.key)
+                setOpen(false)
+              }}
+              className={`block w-full px-4 py-2 text-left text-xs uppercase tracking-widest hover:bg-ep-surface ${
+                sort === opt.key ? 'text-ep-bone' : 'text-ep-muted hover:text-ep-bone'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

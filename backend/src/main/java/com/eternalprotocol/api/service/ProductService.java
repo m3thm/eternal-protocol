@@ -3,6 +3,7 @@ package com.eternalprotocol.api.service;
 import com.eternalprotocol.api.dto.ProductDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Product;
+import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.repository.CartItemRepository;
@@ -27,8 +28,15 @@ public class ProductService {
         this.productImageService = productImageService;
     }
 
-    public List<ProductDto> getAllProducts(String colour, String size, String styleCode) {
-        return productRepository.search(styleCode, colour, size).stream().map(this::toDto).toList();
+    public List<ProductDto> getAllProducts(String colour, String size, String styleCode,
+                                            ProductCategory category, String subCategory) {
+        return productRepository.searchStorefront(styleCode, colour, size, category, subCategory)
+                .stream().map(this::toDto).toList();
+    }
+
+    /** Distinct subcategories within a category — powers the navbar's per-category dropdown. */
+    public List<String> getSubCategories(ProductCategory category) {
+        return productRepository.findDistinctSubCategoriesByCategory(category);
     }
 
     public ProductDto getProductById(Long id) {
@@ -87,6 +95,8 @@ public class ProductService {
     private void applyRequest(Product product, ProductRequestDto request) {
         product.setStyleCode(request.styleCode());
         product.setName(request.name());
+        product.setCategory(request.category());
+        product.setSubCategory(request.subCategory());
         product.setPrice(request.price());
         product.setColour(request.colour());
         product.setSize(request.size());
@@ -109,7 +119,7 @@ public class ProductService {
     }
 
     private ProductDto toDto(Product p) {
-        return new ProductDto(p.getId(), p.getStyleCode(), p.getName(), p.getPrice(), p.getColour(),
-                p.getSize(), p.getStockQty(), p.getImageUrl(), p.getDescription());
+        return new ProductDto(p.getId(), p.getStyleCode(), p.getName(), p.getCategory(), p.getSubCategory(),
+                p.getPrice(), p.getColour(), p.getSize(), p.getStockQty(), p.getImageUrl(), p.getDescription());
     }
 }

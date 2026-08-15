@@ -64,7 +64,9 @@ API:
 
 ### `GET /api/products`
 **Access:** Public
-**Query params:** `colour` (optional), `size` (optional), `styleCode` (optional) — all combine if present.
+**Query params:** `colour` (optional), `size` (optional), `styleCode` (optional),
+`category` (optional, one of `MENS`/`WOMENS`/`ACCESSORIES`), `subCategory`
+(optional) — all combine if present.
 **[UPDATED]** Multiple `Product` rows sharing the same `styleCode` represent
 one "style" with several colour/size variants (e.g. one tee in Black/M and
 White/M is two rows, one `styleCode`). Pass `styleCode` to fetch every
@@ -72,9 +74,13 @@ variant of one style — this is what a product detail page's colour/size
 selector should call. Grouping by an explicit admin-supplied code rather
 than matching on `name` avoids silent grouping breakage from typos and
 lets two genuinely different products share a name if that ever comes up.
+**[NEW]** `category`/`subCategory` are what the storefront's
+MEN'S/WOMEN'S/ACCESSORIES navbar sections (and their subcategory dropdown
+entries) filter by — e.g. `?category=MENS&subCategory=Hoodies`.
 **Response:** `200` — array of:
 ```json
 { "id": 1, "styleCode": "PROTOCOL-001", "name": "Protocol 001 Oversized Tee",
+  "category": "MENS", "subCategory": "T-Shirts",
   "price": 4500.00, "colour": "Black", "size": "M", "stockQty": 50,
   "imageUrl": "...", "description": "..." }
 ```
@@ -83,16 +89,33 @@ lets two genuinely different products share a name if that ever comes up.
 **Access:** Public
 **Response:** `200` — single `ProductDto` as above, or `404` if not found.
 
+### `[NEW] GET /api/products/subcategories`
+**Access:** Public
+**Query params:** `category` (required, one of `MENS`/`WOMENS`/`ACCESSORIES`).
+**Not present in the original spec.** Powers the navbar's per-category
+dropdown: returns the distinct `subCategory` values that currently have at
+least one product in that category, so the dropdown only ever shows
+subcategories that actually exist right now — the same principle the
+colour/size filter options on the shop page already follow, applied one
+level up. There's no fixed, hardcoded list of subcategories anywhere;
+whatever the admin types into a product's subcategory field is what shows
+up here once at least one product uses it.
+**Response:** `200`:
+```json
+["Bottoms", "Hoodies", "T-Shirts"]
+```
+
 ### `POST /api/products`
 **Access:** `ADMIN`
 **Request body:**
 ```json
-{ "styleCode": "PROTOCOL-001", "name": "...", "price": 4500.00, "colour": "Black", "size": "M",
+{ "styleCode": "PROTOCOL-001", "name": "...", "category": "MENS", "subCategory": "T-Shirts",
+  "price": 4500.00, "colour": "Black", "size": "M",
   "stockQty": 50, "imageUrl": "...", "description": "..." }
 ```
-**Validation:** `styleCode`/`name`/`colour`/`size` required and non-blank;
-`price` required and must be `> 0`; `stockQty` required and must be `>= 0`;
-`imageUrl`/`description` optional.
+**Validation:** `styleCode`/`name`/`category`/`subCategory`/`colour`/`size`
+required and non-blank; `price` required and must be `> 0`; `stockQty`
+required and must be `>= 0`; `imageUrl`/`description` optional.
 **[UPDATED] `imageUrl` is normally derived automatically, not sent by the
 admin UI.** If this style+colour already has a photo gallery (see below)
 with a cover photo set, `imageUrl` on the saved `Product` row is
@@ -591,6 +614,7 @@ above.
 | 14 | `DELETE /api/products/{id}` now clears the product's live cart entries first, and refuses the delete with `409` + a clear message if the product is referenced by a past order, instead of failing with a raw 500 | `CartItem` and `OrderItem` both have a foreign key to `Product` with no cascade rule (MySQL default: `RESTRICT`); deleting a product that had ever been ordered previously surfaced as an opaque "Something went wrong" 500 with no indication of the actual cause |
 | 15 | **[NEW]** Product photo gallery (`ProductImage` entity + `/api/products/style/{styleCode}/images` endpoints), with an explicit per-style+colour cover photo (`PUT /api/products/images/{imageId}/cover`) chosen from the gallery rather than uploaded separately | The original design had one `imageUrl` per `Product` row (so effectively per size, duplicated across sizes of the same colour) with no way to show multiple angles of the same item, and the shop-grid cover photo had to be uploaded as a disconnected second copy of a photo already in the gallery if the admin wanted to reuse it |
 | 16 | `DELETE /api/products/images/{imageId}` (and the cascading gallery purge on `DELETE /api/products/{id}` — see #14) now also deletes the underlying Cloudinary asset via its stored `public_id`, not just the DB row | Removing a photo from the gallery previously left it sitting in Cloudinary indefinitely, silently consuming storage/bandwidth quota for assets nothing in the app referenced any more |
+| 17 | **[NEW]** Added `category` (fixed: `MENS`/`WOMENS`/`ACCESSORIES`) and `subCategory` (free text, e.g. "Hoodies", "Caps") to `Product`; `GET /api/products` accepts both as filters; new `GET /api/products/subcategories?category=X` returns the distinct subcategories currently in use within a category | The original catalog had no concept of top-level sections at all — every product sat in one flat, ungrouped shop listing. The storefront's MEN'S/WOMEN'S/ACCESSORIES navbar structure needs both a fixed category to route to the right page and a dynamic subcategory list to populate each section's dropdown |
 
 No endpoint, business rule, or access-control requirement listed in the
 original `Full_Functionality_Spec.md` was omitted, weakened, or altered in

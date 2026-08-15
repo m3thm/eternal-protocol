@@ -36,3 +36,28 @@ export function groupByStyle(products: ProductDto[]): StyleGroup[] {
     }
   })
 }
+
+export type SortKey = 'name_asc' | 'name_desc' | 'price_asc' | 'price_desc'
+
+export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'name_asc', label: 'Name: A to Z' },
+  { key: 'name_desc', label: 'Name: Z to A' },
+  { key: 'price_asc', label: 'Price: Low to High' },
+  { key: 'price_desc', label: 'Price: High to Low' },
+]
+
+/** Sorts a copy of the grouped styles — never mutates the array passed in. */
+export function sortStyles(styles: StyleGroup[], sortKey: SortKey | undefined): StyleGroup[] {
+  if (!sortKey) return styles
+  const sorted = [...styles]
+  switch (sortKey) {
+    case 'name_asc':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name))
+    case 'name_desc':
+      return sorted.sort((a, b) => b.name.localeCompare(a.name))
+    case 'price_asc':
+      return sorted.sort((a, b) => a.fromPrice - b.fromPrice)
+    case 'price_desc':
+      return sorted.sort((a, b) => b.fromPrice - a.fromPrice)
+  }
+}

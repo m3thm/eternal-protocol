@@ -2,6 +2,7 @@ package com.eternalprotocol.api.integration;
 
 import com.eternalprotocol.api.dto.CartItemRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
+import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.repository.AdminRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,8 @@ class CustomerIntegrationTest {
         String adminToken = createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder,
                 "customer.integration.admin@example.com", "adminpass123");
         ProductRequestDto request = new ProductRequestDto(
-                "CART-TEST", "Cart Test Tee", new BigDecimal("2000.00"), "Green", "M", 20, null, null);
+                "CART-TEST", "Cart Test Tee", ProductCategory.MENS, "T-Shirts",
+                new BigDecimal("2000.00"), "Green", "M", 20, null, null);
         String response = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)

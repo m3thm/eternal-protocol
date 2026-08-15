@@ -3,6 +3,7 @@ package com.eternalprotocol.api.service;
 import com.eternalprotocol.api.dto.ProductDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Product;
+import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.repository.CartItemRepository;
@@ -45,6 +46,8 @@ class ProductServiceTest {
         sampleProduct.setId(1L);
         sampleProduct.setStyleCode("PROTOCOL-001");
         sampleProduct.setName("Protocol 001 Oversized Tee");
+        sampleProduct.setCategory(ProductCategory.MENS);
+        sampleProduct.setSubCategory("T-Shirts");
         sampleProduct.setPrice(new BigDecimal("4500.00"));
         sampleProduct.setColour("Black");
         sampleProduct.setSize("M");
@@ -55,34 +58,36 @@ class ProductServiceTest {
 
     @Test
     void getAllProducts_noFilters_passesAllNullsToSearch() {
-        when(productRepository.search(null, null, null)).thenReturn(List.of(sampleProduct));
+        when(productRepository.searchStorefront(null, null, null, null, null)).thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts(null, null, null);
+        List<ProductDto> result = productService.getAllProducts(null, null, null, null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo("Protocol 001 Oversized Tee");
         assertThat(result.get(0).styleCode()).isEqualTo("PROTOCOL-001");
-        verify(productRepository).search(null, null, null);
+        assertThat(result.get(0).category()).isEqualTo(ProductCategory.MENS);
+        assertThat(result.get(0).subCategory()).isEqualTo("T-Shirts");
+        verify(productRepository).searchStorefront(null, null, null, null, null);
     }
 
     @Test
     void getAllProducts_colourFilterOnly_passesColourThrough() {
-        when(productRepository.search(null, "Black", null)).thenReturn(List.of(sampleProduct));
+        when(productRepository.searchStorefront(null, "Black", null, null, null)).thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts("Black", null, null);
+        List<ProductDto> result = productService.getAllProducts("Black", null, null, null, null);
 
         assertThat(result).hasSize(1);
-        verify(productRepository).search(null, "Black", null);
+        verify(productRepository).searchStorefront(null, "Black", null, null, null);
     }
 
     @Test
     void getAllProducts_sizeFilterOnly_passesSizeThrough() {
-        when(productRepository.search(null, null, "M")).thenReturn(List.of(sampleProduct));
+        when(productRepository.searchStorefront(null, null, "M", null, null)).thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts(null, "M", null);
+        List<ProductDto> result = productService.getAllProducts(null, "M", null, null, null);
 
         assertThat(result).hasSize(1);
-        verify(productRepository).search(null, null, "M");
+        verify(productRepository).searchStorefront(null, null, "M", null, null);
     }
 
     @Test
@@ -91,28 +96,52 @@ class ProductServiceTest {
         whiteVariant.setId(2L);
         whiteVariant.setStyleCode("PROTOCOL-001");
         whiteVariant.setName("Protocol 001 Oversized Tee");
+        whiteVariant.setCategory(ProductCategory.MENS);
+        whiteVariant.setSubCategory("T-Shirts");
         whiteVariant.setPrice(new BigDecimal("4500.00"));
         whiteVariant.setColour("White");
         whiteVariant.setSize("M");
         whiteVariant.setStockQty(30);
 
-        when(productRepository.search("PROTOCOL-001", null, null))
+        when(productRepository.searchStorefront("PROTOCOL-001", null, null, null, null))
                 .thenReturn(List.of(sampleProduct, whiteVariant));
 
-        List<ProductDto> result = productService.getAllProducts(null, null, "PROTOCOL-001");
+        List<ProductDto> result = productService.getAllProducts(null, null, "PROTOCOL-001", null, null);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(ProductDto::colour).containsExactlyInAnyOrder("Black", "White");
     }
 
     @Test
-    void getAllProducts_allThreeFiltersCombined_passesAllThrough() {
-        when(productRepository.search("PROTOCOL-001", "Black", "M")).thenReturn(List.of(sampleProduct));
+    void getAllProducts_allFiveFiltersCombined_passesAllThrough() {
+        when(productRepository.searchStorefront("PROTOCOL-001", "Black", "M", ProductCategory.MENS, "T-Shirts"))
+                .thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts("Black", "M", "PROTOCOL-001");
+        List<ProductDto> result =
+                productService.getAllProducts("Black", "M", "PROTOCOL-001", ProductCategory.MENS, "T-Shirts");
 
         assertThat(result).hasSize(1);
-        verify(productRepository).search("PROTOCOL-001", "Black", "M");
+        verify(productRepository).searchStorefront("PROTOCOL-001", "Black", "M", ProductCategory.MENS, "T-Shirts");
+    }
+
+    @Test
+    void getAllProducts_categoryOnly_passesCategoryThrough() {
+        when(productRepository.searchStorefront(null, null, null, ProductCategory.WOMENS, null))
+                .thenReturn(List.of());
+
+        productService.getAllProducts(null, null, null, ProductCategory.WOMENS, null);
+
+        verify(productRepository).searchStorefront(null, null, null, ProductCategory.WOMENS, null);
+    }
+
+    @Test
+    void getSubCategories_delegatesToRepository() {
+        when(productRepository.findDistinctSubCategoriesByCategory(ProductCategory.ACCESSORIES))
+                .thenReturn(List.of("Caps", "Bags"));
+
+        List<String> result = productService.getSubCategories(ProductCategory.ACCESSORIES);
+
+        assertThat(result).containsExactly("Caps", "Bags");
     }
 
     @Test
@@ -141,7 +170,8 @@ class ProductServiceTest {
         // case for a brand-new style code) — productImageService returns
         // empty, so whatever the request explicitly provided is used as-is.
         ProductRequestDto request = new ProductRequestDto(
-                "PROTOCOL-002", "New Tee", new BigDecimal("3000.00"), "White", "L", 20, "img.png", "desc");
+                "PROTOCOL-002", "New Tee", ProductCategory.MENS, "T-Shirts",
+                new BigDecimal("3000.00"), "White", "L", 20, "img.png", "desc");
         when(productImageService.getCoverImageUrl("PROTOCOL-002", "White")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             Product p = inv.getArgument(0);
@@ -165,7 +195,8 @@ class ProductServiceTest {
         // style+colour before saving the product row itself — the gallery
         // cover wins over whatever (if anything) the request passed.
         ProductRequestDto request = new ProductRequestDto(
-                "PROTOCOL-003", "Cover Test Tee", new BigDecimal("3000.00"), "Black", "M", 10, null, null);
+                "PROTOCOL-003", "Cover Test Tee", ProductCategory.MENS, "T-Shirts",
+                new BigDecimal("3000.00"), "Black", "M", 10, null, null);
         when(productImageService.getCoverImageUrl("PROTOCOL-003", "Black"))
                 .thenReturn(Optional.of("https://cloudinary.example.com/gallery-cover.png"));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -178,7 +209,8 @@ class ProductServiceTest {
     @Test
     void updateProduct_existingProduct_updatesFieldsIncludingStyleCode() {
         ProductRequestDto request = new ProductRequestDto(
-                "PROTOCOL-001-V2", "Updated Tee", new BigDecimal("5000.00"), "Grey", "XL", 10, "img2.png", "desc2");
+                "PROTOCOL-001-V2", "Updated Tee", ProductCategory.WOMENS, "Hoodies",
+                new BigDecimal("5000.00"), "Grey", "XL", 10, "img2.png", "desc2");
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
         when(productImageService.getCoverImageUrl("PROTOCOL-001-V2", "Grey")).thenReturn(Optional.empty());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -187,6 +219,8 @@ class ProductServiceTest {
 
         assertThat(result.styleCode()).isEqualTo("PROTOCOL-001-V2");
         assertThat(result.name()).isEqualTo("Updated Tee");
+        assertThat(result.category()).isEqualTo(ProductCategory.WOMENS);
+        assertThat(result.subCategory()).isEqualTo("Hoodies");
         assertThat(result.price()).isEqualByComparingTo("5000.00");
         assertThat(result.colour()).isEqualTo("Grey");
         assertThat(result.stockQty()).isEqualTo(10);
@@ -196,7 +230,7 @@ class ProductServiceTest {
     @Test
     void updateProduct_notFound_throwsResourceNotFoundException() {
         ProductRequestDto request = new ProductRequestDto(
-                "STYLE-X", "X", BigDecimal.TEN, "Red", "S", 5, null, null);
+                "STYLE-X", "X", ProductCategory.ACCESSORIES, "Caps", BigDecimal.TEN, "Red", "S", 5, null, null);
         when(productRepository.findById(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.updateProduct(404L, request))

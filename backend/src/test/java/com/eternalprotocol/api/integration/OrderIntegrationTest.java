@@ -4,6 +4,7 @@ import com.eternalprotocol.api.dto.OrderItemRequestDto;
 import com.eternalprotocol.api.dto.OrderRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Athlete;
+import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.repository.AdminRepository;
 import com.eternalprotocol.api.repository.AthleteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,7 +59,7 @@ class OrderIntegrationTest {
     private Long createTestProduct(String styleCode, String name, BigDecimal price, int stockQty) throws Exception {
         String adminToken = adminToken();
         ProductRequestDto request = new ProductRequestDto(
-                styleCode, name, price, "Black", "M", stockQty, null, null);
+                styleCode, name, ProductCategory.MENS, "T-Shirts", price, "Black", "M", stockQty, null, null);
 
         String response = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))

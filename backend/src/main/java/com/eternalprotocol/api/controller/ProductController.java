@@ -6,6 +6,7 @@ import com.eternalprotocol.api.dto.ProductImageDto;
 import com.eternalprotocol.api.dto.ProductImageRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.dto.ReorderImagesRequestDto;
+import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.service.ImageUploadService;
 import com.eternalprotocol.api.service.ProductImageService;
 import com.eternalprotocol.api.service.ProductService;
@@ -31,13 +32,27 @@ public class ProductController {
         this.productImageService = productImageService;
     }
 
-    // Public — Module 1's storefront only ever needs these two GETs.
+    // Public — the storefront's category pages (MEN'S/WOMEN'S/ACCESSORIES,
+    // each with colour/size filters) and the PDP's variant lookup both use this.
     @GetMapping
     public ResponseEntity<List<ProductDto>> getAllProducts(
             @RequestParam(required = false) String colour,
             @RequestParam(required = false) String size,
-            @RequestParam(required = false) String styleCode) {
-        return ResponseEntity.ok(productService.getAllProducts(colour, size, styleCode));
+            @RequestParam(required = false) String styleCode,
+            @RequestParam(required = false) ProductCategory category,
+            @RequestParam(required = false) String subCategory) {
+        return ResponseEntity.ok(productService.getAllProducts(colour, size, styleCode, category, subCategory));
+    }
+
+    /**
+     * Public. Distinct subcategories that currently have products within
+     * one category — what the navbar's MEN'S/WOMEN'S/ACCESSORIES dropdowns
+     * show. Only ever lists subcategories that actually exist right now,
+     * same principle as the colour/size filter options on the shop page.
+     */
+    @GetMapping("/subcategories")
+    public ResponseEntity<List<String>> getSubCategories(@RequestParam ProductCategory category) {
+        return ResponseEntity.ok(productService.getSubCategories(category));
     }
 
     @GetMapping("/{id}")

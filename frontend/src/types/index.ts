@@ -14,10 +14,14 @@ export interface ApiError {
 
 // ---- Module 1: Storefront & Catalog ----
 
+export type ProductCategory = 'MENS' | 'WOMENS' | 'ACCESSORIES'
+
 export interface ProductDto {
   id: number
   styleCode: string
   name: string
+  category: ProductCategory | null
+  subCategory: string | null
   price: number
   colour: string
   size: string
@@ -29,6 +33,8 @@ export interface ProductDto {
 export interface ProductInput {
   styleCode: string
   name: string
+  category: ProductCategory
+  subCategory: string
   price: number
   colour: string
   size: string

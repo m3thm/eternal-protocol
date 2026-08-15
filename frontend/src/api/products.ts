@@ -1,10 +1,19 @@
 import { apiClient } from './client'
-import type { ProductDto, ProductImageDto, ProductImageInput, ProductInput, UploadImageResponse } from '@/types'
+import type {
+  ProductCategory,
+  ProductDto,
+  ProductImageDto,
+  ProductImageInput,
+  ProductInput,
+  UploadImageResponse,
+} from '@/types'
 
 export interface ProductQuery {
   colour?: string
   size?: string
   styleCode?: string
+  category?: ProductCategory
+  subCategory?: string
 }
 
 export const productsApi = {
@@ -17,6 +26,10 @@ export const productsApi = {
 
   get: (id: number) =>
     apiClient.get<ProductDto>(`/api/products/${id}`).then((r) => r.data),
+
+  /** Distinct subcategories currently in use within a category — powers the navbar's dropdowns. */
+  subCategories: (category: ProductCategory) =>
+    apiClient.get<string[]>('/api/products/subcategories', { params: { category } }).then((r) => r.data),
 
   create: (input: ProductInput) =>
     apiClient.post<ProductDto>('/api/products', input).then((r) => r.data),

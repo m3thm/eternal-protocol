@@ -5,10 +5,11 @@ import { useToastStore } from '@/stores/toast'
 import { getErrorMessage } from '@/api/client'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Button } from '@/components/ui/Button'
-import { FormInput, FormTextarea } from '@/components/ui/FormField'
+import { FormInput, FormSelect, FormTextarea } from '@/components/ui/FormField'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Price } from '@/components/ui/Price'
 import { FaCloudArrowUp, FaStar } from 'react-icons/fa6'
+import { CATEGORY_NAV } from '@/lib/categories'
 import type { ProductDto, ProductImageDto, ProductInput } from '@/types'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -17,6 +18,8 @@ const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif
 const emptyForm: ProductInput = {
   styleCode: '',
   name: '',
+  category: 'MENS',
+  subCategory: '',
   price: 0,
   colour: '',
   size: '',
@@ -53,6 +56,7 @@ export function AdminProductsPage() {
     },
     { header: 'Style', cell: (p) => p.styleCode },
     { header: 'Name', cell: (p) => p.name },
+    { header: 'Category', cell: (p) => (p.category ? `${p.category} / ${p.subCategory ?? '—'}` : '—') },
     { header: 'Colour', cell: (p) => p.colour },
     { header: 'Size', cell: (p) => p.size },
     { header: 'Price', cell: (p) => <Price amount={p.price} /> },
@@ -120,6 +124,8 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
       ? {
           styleCode: product.styleCode,
           name: product.name,
+          category: product.category ?? 'MENS',
+          subCategory: product.subCategory ?? '',
           price: product.price,
           colour: product.colour,
           size: product.size,
@@ -129,6 +135,15 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
       : emptyForm,
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Suggestions only — the admin can still type a brand-new subcategory
+  // freely; this datalist just surfaces what's already in use for the
+  // selected category so naming stays consistent (e.g. always "Hoodies",
+  // never a mix of "Hoodies"/"Hoodie"/"hoodies").
+  const { data: subCategorySuggestions } = useQuery({
+    queryKey: ['subcategories', form.category],
+    queryFn: () => productsApi.subCategories(form.category),
+  })
 
   const saveMutation = useMutation({
     mutationFn: (input: ProductInput) => (product ? productsApi.update(product.id, input) : productsApi.create(input)),
@@ -144,6 +159,7 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
     const next: Record<string, string> = {}
     if (!form.styleCode.trim()) next.styleCode = 'Required'
     if (!form.name.trim()) next.name = 'Required'
+    if (!form.subCategory.trim()) next.subCategory = 'Required'
     if (!form.colour.trim()) next.colour = 'Required'
     if (!form.size.trim()) next.size = 'Required'
     if (!form.price || form.price <= 0) next.price = 'Must be greater than 0'
@@ -177,6 +193,32 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             error={errors.name}
           />
+          <FormSelect
+            label="Category"
+            value={form.category}
+            onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as ProductInput['category'] }))}
+          >
+            {CATEGORY_NAV.map(({ category, label }) => (
+              <option key={category} value={category}>
+                {label}
+              </option>
+            ))}
+          </FormSelect>
+          <div>
+            <FormInput
+              label="Subcategory"
+              list="subcategory-suggestions"
+              value={form.subCategory}
+              onChange={(e) => setForm((f) => ({ ...f, subCategory: e.target.value }))}
+              error={errors.subCategory}
+              placeholder="e.g. Hoodies, Caps, Bottoms"
+            />
+            <datalist id="subcategory-suggestions">
+              {(subCategorySuggestions ?? []).map((sub) => (
+                <option key={sub} value={sub} />
+              ))}
+            </datalist>
+          </div>
           <FormInput
             label="Colour"
             value={form.colour}

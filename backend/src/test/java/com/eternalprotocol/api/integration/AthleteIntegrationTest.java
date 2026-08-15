@@ -3,6 +3,7 @@ package com.eternalprotocol.api.integration;
 import com.eternalprotocol.api.dto.OrderRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Athlete;
+import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.repository.AdminRepository;
 import com.eternalprotocol.api.repository.AthleteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,7 +54,8 @@ class AthleteIntegrationTest {
         String adminToken = createAdminAndGetToken(mockMvc, objectMapper, adminRepository, passwordEncoder,
                 "athlete.test.admin@example.com", "adminpass123");
         ProductRequestDto request = new ProductRequestDto(
-                "ATHLETE-TEST", "Athlete Test Tee", new BigDecimal("4500.00"), "Black", "M", 20, null, null);
+                "ATHLETE-TEST", "Athlete Test Tee", ProductCategory.MENS, "T-Shirts",
+                new BigDecimal("4500.00"), "Black", "M", 20, null, null);
         String response = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
