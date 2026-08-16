@@ -38,14 +38,9 @@ public class Product {
 
     /**
      * One of the three fixed top-level sections (see {@link ProductCategory}).
-     * Nullable at the DB level — despite being effectively required by the
-     * time a product is created via the API (see ProductRequestDto) —
-     * purely so adding this column via `ddl-auto: update` doesn't fail
-     * against a MySQL table that already has rows with no value to
-     * backfill. New rows always have one going forward.
      */
     @Enumerated(EnumType.STRING)
-    @Column(name = "category")
+    @Column(name = "category", nullable = false)
     private ProductCategory category;
 
     /**
@@ -55,7 +50,7 @@ public class Product {
      * dropdown is populated from whatever distinct values actually exist
      * for that category, the same way colour/size filter options work.
      */
-    @Column(name = "sub_category")
+    @Column(name = "sub_category", nullable = false)
     private String subCategory;
 
     @Column(nullable = false, precision = 10, scale = 2)

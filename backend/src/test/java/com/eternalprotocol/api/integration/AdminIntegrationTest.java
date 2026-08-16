@@ -190,6 +190,8 @@ class AdminIntegrationTest {
         Product product = new Product();
         product.setStyleCode("COMMISSION-TEST");
         product.setName("Commission Test Tee");
+        product.setCategory(com.eternalprotocol.api.entity.ProductCategory.MENS);
+        product.setSubCategory("T-Shirts");
         product.setPrice(new BigDecimal("4500.00"));
         product.setColour("Black");
         product.setSize("M");
