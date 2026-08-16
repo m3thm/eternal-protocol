@@ -12,3 +12,7 @@ TRUNCATE TABLE products;
  
 -- Re-enable FK checks
 SET FOREIGN_KEY_CHECKS = 1;
+
+ALTER TABLE products MODIFY category enum('ACCESSORIES','MENS','WOMENS') NOT NULL;
+ALTER TABLE products MODIFY sub_category varchar(255) NOT NULL;
+

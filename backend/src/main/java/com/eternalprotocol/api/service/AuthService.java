@@ -14,6 +14,14 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+/**
+ * Business logic for logging in and registering.
+ * <p>
+ * A "service" in Spring holds the actual business logic for a feature,
+ * kept separate from controllers (which just handle HTTP) and repositories
+ * (which just handle database access). Controllers call into services to
+ * get work done.
+ */
 @Service
 public class AuthService {
 
@@ -22,6 +30,12 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final CustomerRepository customerRepository;
 
+    /**
+     * @param userDetailsService looks up a user by email across all three account tables
+     * @param passwordEncoder    checks/hashes passwords
+     * @param jwtUtil             issues login tokens
+     * @param customerRepository  saves new customer accounts
+     */
     public AuthService(CustomUserDetailsService userDetailsService,
                         PasswordEncoder passwordEncoder,
                         JwtUtil jwtUtil,
@@ -32,6 +46,15 @@ public class AuthService {
         this.customerRepository = customerRepository;
     }
 
+    /**
+     * Checks a login attempt against whichever account table matches the
+     * email — customer, athlete, or admin — and issues a token if it's
+     * correct.
+     *
+     * @param request email and password submitted
+     * @return a login token plus the account's role and ID
+     * @throws InvalidCredentialsException if the email/password is wrong, or the account is deactivated
+     */
     public AuthResponseDto login(LoginRequestDto request) {
         AppUserDetails user;
         try {
@@ -52,6 +75,13 @@ public class AuthService {
         return new AuthResponseDto(token, user.getRole(), user.getId());
     }
 
+    /**
+     * Creates a new customer account and immediately logs them in.
+     *
+     * @param request new account's details
+     * @return a login token for the newly created account
+     * @throws EmailAlreadyInUseException if the email is already registered
+     */
     public AuthResponseDto register(RegisterRequestDto request) {
         if (customerRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyInUseException("An account with this email already exists");

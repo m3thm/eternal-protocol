@@ -24,10 +24,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Single source of truth for which routes are public vs. which require
- * CUSTOMER / ATHLETE / ADMIN. Stateless (JWT-only, no server sessions) so
- * this scales cleanly across the three user types without shared session
- * state.
+ * Central place defining which API routes are public and which require a
+ * CUSTOMER, ATHLETE, or ADMIN login.
+ * <p>
+ * This app is "stateless": it never uses server-side sessions or cookies to
+ * remember who's logged in. Instead, every request proves who it's from by
+ * sending a JWT token (see {@link JwtAuthFilter} and
+ * {@code com.eternalprotocol.api.security.JwtUtil}), which scales cleanly
+ * across the three different user types without any shared session state.
  */
 @Configuration
 @EnableWebSecurity
@@ -38,6 +42,12 @@ public class SecurityConfig {
     private final CorsConfigurationSource corsConfigurationSource;
     private final ObjectMapper objectMapper;
 
+    /**
+     * @param jwtAuthFilter           filter that reads and validates login tokens on every request
+     * @param userDetailsService      looks up users by email during login
+     * @param corsConfigurationSource allowed-origins rules from {@link CorsConfig}
+     * @param objectMapper            used to write JSON error bodies for auth failures
+     */
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
                            CustomUserDetailsService userDetailsService,
                            CorsConfigurationSource corsConfigurationSource,
@@ -48,11 +58,24 @@ public class SecurityConfig {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * The password hashing algorithm used everywhere passwords are stored
+     * or checked. BCrypt is a standard, secure choice for password hashing.
+     *
+     * @return the shared password encoder
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Tells Spring Security how to verify a login attempt: look the user
+     * up via {@link CustomUserDetailsService}, then check their password
+     * with {@link #passwordEncoder()}.
+     *
+     * @return the configured authentication provider
+     */
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
@@ -61,11 +84,28 @@ public class SecurityConfig {
         return provider;
     }
 
+    /**
+     * Exposes Spring Security's {@link AuthenticationManager}, used by the
+     * login endpoint to actually attempt authenticating a submitted
+     * email/password pair.
+     *
+     * @param config Spring Security's authentication setup
+     * @return the shared authentication manager
+     * @throws Exception if Spring Security fails to build the manager
+     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
 
+    /**
+     * Defines the full set of access rules for every API route: which
+     * endpoints are public, and which require which role.
+     *
+     * @param http Spring Security's request-security builder
+     * @return the finished security rules
+     * @throws Exception if the security chain fails to build
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -123,6 +163,17 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Writes a JSON error body directly to the response, used for
+     * authentication/authorization failures that happen before a
+     * controller (and {@code GlobalExceptionHandler}) ever gets involved.
+     *
+     * @param response the HTTP response to write to
+     * @param status   HTTP status code to send
+     * @param error    short error name
+     * @param message  human-readable explanation
+     * @throws java.io.IOException if writing the response fails
+     */
     private void writeJsonError(jakarta.servlet.http.HttpServletResponse response, int status,
                                  String error, String message) throws java.io.IOException {
         response.setStatus(status);

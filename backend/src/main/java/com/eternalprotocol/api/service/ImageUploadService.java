@@ -12,6 +12,13 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Handles uploading and deleting product images on Cloudinary.
+ * <p>
+ * Image files themselves are never stored in this app's own database or
+ * disk — only the resulting Cloudinary URL is saved, in
+ * {@code ProductImage.imageUrl}.
+ */
 @Service
 public class ImageUploadService {
 
@@ -22,17 +29,28 @@ public class ImageUploadService {
 
     private final Cloudinary cloudinary;
 
+    /**
+     * @param cloudinary the shared Cloudinary client, configured in {@code CloudinaryConfig}
+     */
     public ImageUploadService(Cloudinary cloudinary) {
         this.cloudinary = cloudinary;
     }
 
-    /** Cloudinary's `secure_url` (what gets displayed) plus its `public_id` (what a later delete needs). */
+    /**
+     * Result of a successful upload.
+     *
+     * @param url      Cloudinary's permanent, public HTTPS URL — used to display the image
+     * @param publicId Cloudinary's own asset ID — needed later to delete this exact image
+     */
     public record UploadResult(String url, String publicId) {}
 
     /**
-     * Validates and uploads a product image, returning its public,
-     * permanent HTTPS URL plus the Cloudinary asset ID needed to delete it
-     * later — the actual image bytes never touch our own database or disk.
+     * Validates and uploads a product image to Cloudinary.
+     *
+     * @param file the image file submitted by the admin
+     * @return the uploaded image's URL and Cloudinary ID
+     * @throws IllegalArgumentException if the file is missing, too large, or an unsupported type
+     * @throws ImageUploadException     if Cloudinary itself fails to accept the upload
      */
     public UploadResult uploadProductImage(MultipartFile file) {
         validate(file);
@@ -50,17 +68,19 @@ public class ImageUploadService {
     }
 
     /**
-     * Deletes an asset from Cloudinary by its public_id — called whenever a
-     * gallery photo is removed, a colour's whole photo set is cleaned up
-     * after its last product row is deleted, so it isn't sitting there
-     * burning storage/bandwidth quota for nothing.
+     * Deletes an image asset from Cloudinary, called whenever a gallery
+     * photo is removed or a colour's whole photo set is cleaned up after
+     * its last product row is deleted — so it isn't left burning storage
+     * quota for no reason.
      * <p>
-     * Deliberately swallows failures rather than throwing: the admin's
-     * actual intent (remove this from my database / product listing) has
-     * already succeeded by the time this runs, and a transient Cloudinary
+     * Deliberately does not throw on failure. By the time this runs, the
+     * admin's actual intent (remove this image from the product listing)
+     * has already succeeded in our own database, so a transient Cloudinary
      * error shouldn't roll that back or surface as a confusing error on an
-     * otherwise-successful delete. Worst case on failure is one orphaned
-     * Cloudinary asset, logged here for manual cleanup — not a broken app.
+     * otherwise-successful delete. Worst case is one orphaned Cloudinary
+     * asset, which gets logged here for manual cleanup later.
+     *
+     * @param publicId Cloudinary's asset ID to delete, may be null/blank if unknown
      */
     public void deleteProductImage(String publicId) {
         if (publicId == null || publicId.isBlank()) {
@@ -73,6 +93,13 @@ public class ImageUploadService {
         }
     }
 
+    /**
+     * Checks a file is present, under the size limit, and an allowed image
+     * type before it's ever sent to Cloudinary.
+     *
+     * @param file the file to validate
+     * @throws IllegalArgumentException if any check fails
+     */
     private void validate(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("No image file provided");

@@ -4,6 +4,22 @@ import com.eternalprotocol.api.entity.ProductCategory;
 
 import java.math.BigDecimal;
 
+/**
+ * A single product variant as shown on the storefront (shop grid and
+ * product detail page).
+ *
+ * @param id          product variant's database ID
+ * @param styleCode   code shared by every colour/size of this style
+ * @param name        product name
+ * @param category    top-level section, e.g. MENS
+ * @param subCategory admin-set subcategory, e.g. "Hoodies"
+ * @param price       price of this variant
+ * @param colour      colour of this variant
+ * @param size        size of this variant
+ * @param stockQty    units currently in stock
+ * @param imageUrl    main thumbnail image
+ * @param description longer description text
+ */
 public record ProductDto(
         Long id,
         String styleCode,

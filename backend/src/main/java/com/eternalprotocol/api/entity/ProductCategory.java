@@ -1,10 +1,10 @@
 package com.eternalprotocol.api.entity;
 
 /**
- * The three top-level storefront sections — drives the MEN'S / WOMEN'S /
- * ACCESSORIES navbar structure directly, so this set is fixed (unlike
- * {@link Product#getSubCategory()}, which is free text set by the admin,
- * e.g. "Hoodies", "Caps" — those vary and grow over time, categories don't).
+ * The three fixed top-level storefront sections. Drives the MEN'S /
+ * WOMEN'S / ACCESSORIES navigation menu directly, so — unlike
+ * {@link Product#getSubCategory()}, which is free text set by the admin —
+ * this set of values never changes.
  */
 public enum ProductCategory {
     MENS,

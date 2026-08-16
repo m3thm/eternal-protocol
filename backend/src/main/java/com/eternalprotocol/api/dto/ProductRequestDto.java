@@ -8,6 +8,23 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 
+/**
+ * Request body for an admin creating or updating one product variant.
+ * <p>
+ * Represents a single colour/size row — creating three sizes of the same
+ * style means submitting this three times with the same {@code styleCode}.
+ *
+ * @param styleCode   code shared by every colour/size of this style
+ * @param name        product name shown to customers
+ * @param category    top-level section
+ * @param subCategory admin-set subcategory
+ * @param price       price, must be greater than 0
+ * @param colour      colour of this variant
+ * @param size        size of this variant
+ * @param stockQty    units in stock, cannot be negative
+ * @param imageUrl    main thumbnail image URL, obtained from the upload endpoint
+ * @param description longer description text
+ */
 public record ProductRequestDto(
         @NotBlank(message = "Style code is required") String styleCode,
         @NotBlank(message = "Product name is required") String name,

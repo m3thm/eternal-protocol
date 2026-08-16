@@ -8,16 +8,28 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
+/**
+ * Data access for {@link Product} rows. Most methods here use
+ * {@code @Query}, which lets us write the database query by hand (in JPQL,
+ * a SQL-like language that works with entity classes instead of table
+ * names) instead of relying on Spring to guess it from a method name. Each
+ * {@code @Param} annotation binds a Java method parameter to a named
+ * placeholder (e.g. {@code :styleCode}) inside that query.
+ */
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /**
-     * Search covering styleCode/colour/size only — what ProductService and
-     * ProductImageService use internally for style+colour lookups (cover
-     * sync, cascading gallery cleanup on delete) where category is
-     * irrelevant, since those already scope by an exact styleCode. Kept
-     * separate from {@link #searchStorefront} below so those internal call
-     * sites don't need to pass category/subCategory nulls they don't care
-     * about.
+     * Filters products by style code, colour, and/or size. Pass null for
+     * any filter you don't want applied. Used internally by services (not
+     * the public API) for lookups that already know the exact style, such
+     * as syncing cover images or cleaning up a gallery when a product is
+     * deleted — category doesn't matter for those, so it's left out of
+     * this query and handled separately by {@link #searchStorefront}.
+     *
+     * @param styleCode style code to match, or null to ignore
+     * @param colour    colour to match, or null to ignore
+     * @param size      size to match, or null to ignore
+     * @return products matching all the given filters
      */
     @Query("SELECT p FROM Product p WHERE " +
             "(:styleCode IS NULL OR LOWER(p.styleCode) = LOWER(:styleCode)) AND " +
@@ -28,10 +40,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                           @Param("size") String size);
 
     /**
-     * The public GET /api/products search: everything `search` covers,
-     * plus the MEN'S/WOMEN'S/ACCESSORIES navbar sections and their
-     * subcategory dropdowns. Pass null for any filter you don't want
-     * applied.
+     * The full storefront search backing {@code GET /api/products}. Same
+     * filters as {@link #search}, plus category and subcategory for the
+     * MEN'S / WOMEN'S / ACCESSORIES navigation and their dropdown filters.
+     * Pass null for any filter you don't want applied.
+     *
+     * @param styleCode   style code to match, or null to ignore
+     * @param colour      colour to match, or null to ignore
+     * @param size        size to match, or null to ignore
+     * @param category    top-level category to match, or null to ignore
+     * @param subCategory subcategory to match, or null to ignore
+     * @return products matching all the given filters
      */
     @Query("SELECT p FROM Product p WHERE " +
             "(:styleCode IS NULL OR LOWER(p.styleCode) = LOWER(:styleCode)) AND " +
@@ -46,10 +65,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                                     @Param("subCategory") String subCategory);
 
     /**
-     * Distinct subcategory names within one category, for the navbar's
-     * per-category dropdown — only ever shows subcategories that actually
-     * have products right now, the same way colour/size filter options on
-     * the shop page are driven by what's actually in stock/listed.
+     * Gets every distinct subcategory name currently used within one
+     * category, alphabetically. Powers the navbar's per-category dropdown,
+     * so it only ever lists subcategories that actually have products
+     * right now — the same way colour/size filter options are driven by
+     * what's actually listed.
+     *
+     * @param category category to look up subcategories for
+     * @return distinct subcategory names, alphabetical
      */
     @Query("SELECT DISTINCT p.subCategory FROM Product p WHERE p.category = :category " +
             "AND p.subCategory IS NOT NULL ORDER BY p.subCategory ASC")

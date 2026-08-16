@@ -4,6 +4,15 @@ import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
 
+/**
+ * Request body for an admin creating a new athlete account.
+ *
+ * @param name           athlete's full name
+ * @param email          athlete's login email, must be a valid email format
+ * @param password       athlete's login password, at least 6 characters
+ * @param athleteCode    unique discount/referral code for this athlete
+ * @param commissionRate commission percentage, between 0 and 100
+ */
 public record CreateAthleteRequestDto(
         @NotBlank(message = "Name is required") String name,
         @NotBlank(message = "Email is required") @Email(message = "Enter a valid email") String email,

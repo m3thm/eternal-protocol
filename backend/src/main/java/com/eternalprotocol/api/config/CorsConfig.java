@@ -9,13 +9,26 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
+/**
+ * Configures CORS (Cross-Origin Resource Sharing) — the browser security
+ * rule that normally blocks a website from calling an API hosted on a
+ * different domain. Since the frontend (e.g. running on
+ * {@code localhost:5173}) and this backend (e.g. {@code localhost:8080})
+ * are different origins, this class explicitly allows the frontend to call
+ * this API.
+ */
 @Configuration
 public class CorsConfig {
 
-    // Comma-separated list, e.g. "http://localhost:5173,https://eternalprotocol.vercel.app"
+    /** Comma-separated list of allowed frontend URLs, e.g. "http://localhost:5173,https://eternalprotocol.vercel.app". */
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
+    /**
+     * Builds the CORS rules applied to every request.
+     *
+     * @return the configured CORS rules
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();

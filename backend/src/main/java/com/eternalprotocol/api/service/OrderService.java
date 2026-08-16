@@ -16,6 +16,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Business logic for placing orders, confirming PayHere payments, and
+ * reading back order history.
+ * <p>
+ * Most read methods here are {@code @Transactional(readOnly = true)}. This
+ * matters because every DTO built here reads {@code order.getItems()} and
+ * each item's related product/customer — all "lazy" associations that are
+ * only fetched from the database when actually read. With
+ * {@code open-in-view: false} in this app's configuration, those lazy
+ * reads only work while the original database session is still open.
+ * Building the DTO inside the same {@code @Transactional} method (instead
+ * of returning a raw entity for something else to convert later) is what
+ * keeps that session open long enough. Skipping the annotation won't fail
+ * in tests, since the test framework happens to wrap a whole test method
+ * in one shared transaction — but it will throw a
+ * {@code LazyInitializationException} against a real frontend request,
+ * where no such wrapping transaction exists.
+ */
 @Service
 public class OrderService {
 
@@ -27,6 +45,15 @@ public class OrderService {
     private final CartService cartService;
     private final PaymentService paymentService;
 
+    /**
+     * @param orderRepository      access to order data
+     * @param productRepository    access to product data, for stock checks and pricing
+     * @param customerRepository   access to customer data
+     * @param athleteRepository    access to athlete data, for discount code lookup
+     * @param commissionRepository access to commission data
+     * @param cartService          clears a customer's saved cart after checkout
+     * @param paymentService       builds the PayHere payment flow
+     */
     public OrderService(OrderRepository orderRepository,
                          ProductRepository productRepository,
                          CustomerRepository customerRepository,
@@ -44,16 +71,25 @@ public class OrderService {
     }
 
     /**
-     * Creates a multi-item order + (optionally) a linked, not-yet-confirmed
-     * commission, then kicks off the PayHere flow. One request = one order
-     * = one PayHere payment, regardless of how many distinct products or
-     * what quantities are in `request.items()` — this is what actually
-     * lets a whole cart check out as a single purchase instead of one
-     * PayHere payment per line.
+     * Places a new order: validates stock, applies any athlete discount,
+     * saves the order and its items, reserves stock, creates a commission
+     * if applicable, and kicks off the PayHere payment flow.
+     * <p>
+     * One call to this method is always one order and one PayHere payment,
+     * no matter how many different products or quantities are in
+     * {@code request.items()} — this is what lets an entire cart check out
+     * as a single purchase, instead of one payment per product line.
+     * <p>
+     * Works identically for guest checkout and logged-in customers.
+     * {@code loggedInCustomerId} is null for guests, in which case a fresh
+     * {@code Customer} row is created just for this order, exactly as it
+     * worked before customer accounts existed.
      *
-     * Works identically for guest checkout and logged-in customers —
-     * loggedInCustomerId is null for guests, in which case a fresh
-     * Customer row is created exactly as before customer accounts existed.
+     * @param request             checkout details: items, delivery info, optional athlete code
+     * @param loggedInCustomerId  the current logged-in customer's ID, or null for a guest checkout
+     * @return the created order's ID, total, and PayHere payment URL
+     * @throws ResourceNotFoundException   if a requested product or the logged-in customer doesn't exist
+     * @throws InsufficientStockException  if any requested item exceeds available stock
      */
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto request, Long loggedInCustomerId) {
@@ -152,9 +188,16 @@ public class OrderService {
     }
 
     /**
-     * Called by the PayHere webhook (notify_url). Only ever flips PENDING ->
-     * PAID after the signature has already been verified by the caller —
-     * this method assumes that check already happened.
+     * Marks an order as paid after PayHere confirms payment. Only ever
+     * called from the PayHere webhook, and only after the caller has
+     * already verified the webhook's signature — this method assumes that
+     * check has already happened and does not repeat it.
+     * <p>
+     * Safe to call more than once for the same order (idempotent), since
+     * PayHere's webhook can fire more than once for the same payment.
+     *
+     * @param orderId order to mark as paid
+     * @throws ResourceNotFoundException if no order exists with this ID
      */
     @Transactional
     public void confirmPayment(Long orderId) {
@@ -174,25 +217,26 @@ public class OrderService {
         });
     }
 
-    // NOTE on @Transactional(readOnly = true) below: every one of these
-    // methods maps an Order (or Commission -> Order) to a DTO that reads
-    // order.getItems() and each item's order.getCustomer()/item.getProduct()
-    // — both LAZY associations. With `open-in-view: false`, those are only
-    // safely readable while the JPA session from the original query is
-    // still open. Doing the DTO mapping inside the same @Transactional
-    // method (rather than returning the raw entity for a caller to map
-    // later) is what keeps that session alive long enough. Skipping this
-    // annotation doesn't fail in tests — the test framework happens to wrap
-    // a whole test method in one shared transaction — but WILL throw
-    // LazyInitializationException against a real frontend, where no such
-    // wrapping transaction exists.
-
+    /**
+     * Gets full details of a single order, used for the order confirmation
+     * page.
+     *
+     * @param orderId order's database ID
+     * @return the order's full details
+     * @throws ResourceNotFoundException if no order exists with this ID
+     */
     @Transactional(readOnly = true)
     public OrderDetailDto getOrderDetail(Long orderId) {
         return toDetailDto(orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId)));
     }
 
+    /**
+     * Gets a customer's order history, most recent first.
+     *
+     * @param customerId customer's database ID
+     * @return that customer's orders, newest first
+     */
     @Transactional(readOnly = true)
     public List<OrderDetailDto> getOrdersForCustomer(Long customerId) {
         return orderRepository.findByCustomerIdOrderByOrderDateDesc(customerId).stream()
@@ -201,11 +245,16 @@ public class OrderService {
     }
 
     /**
-     * Builds the PayHere auto-submit HTML for a given order — kept as one
-     * transactional method (rather than returning the Order entity to the
-     * controller for PaymentService to read afterward) for the same lazy-
-     * loading reason as above: order.getItems() and order.getCustomer()
-     * need to be read while the session is still open.
+     * Builds the self-submitting PayHere checkout HTML for an order. Kept
+     * as a single {@code @Transactional} method (rather than fetching the
+     * {@code Order} entity here and handing it to {@code PaymentService}
+     * afterward) for the same lazy-loading reason described on the class:
+     * {@code order.getItems()} and {@code order.getCustomer()} must be
+     * read while the database session is still open.
+     *
+     * @param orderId order to build the payment page for
+     * @return the complete HTML page
+     * @throws ResourceNotFoundException if no order exists with this ID
      */
     @Transactional(readOnly = true)
     public String buildCheckoutRedirectHtml(Long orderId) {
@@ -214,8 +263,13 @@ public class OrderService {
         return paymentService.buildCheckoutFormHtml(order);
     }
 
-    // ---- Admin ----
-
+    /**
+     * Gets every order in the system, most recent first, for the admin
+     * dashboard, optionally filtered by payment status.
+     *
+     * @param statusFilter payment status name to filter by (e.g. "PAID"), or null/blank for all
+     * @return matching orders
+     */
     @Transactional(readOnly = true)
     public List<AdminOrderDto> getAllOrdersForAdmin(String statusFilter) {
         List<Order> orders;
@@ -228,12 +282,25 @@ public class OrderService {
         return orders.stream().map(this::toAdminDto).toList();
     }
 
+    /**
+     * Converts a database entity into its public-facing DTO shape.
+     *
+     * @param o the entity to convert
+     * @return the equivalent DTO
+     */
     private OrderDetailDto toDetailDto(Order o) {
         return new OrderDetailDto(
                 o.getId(), toLineItemDtos(o), o.getSubtotalAmount(), o.getDiscountAmount(), o.getTotalAmount(),
                 o.getPaymentStatus().name(), o.getAthleteCode(), o.getOrderDate());
     }
 
+    /**
+     * Converts a database entity into its public-facing DTO shape, for the
+     * admin order list.
+     *
+     * @param o the entity to convert
+     * @return the equivalent DTO
+     */
     private AdminOrderDto toAdminDto(Order o) {
         return new AdminOrderDto(
                 o.getId(), o.getCustomer().getName(), o.getCustomer().getPhone(), o.getCustomer().getAddress(),
@@ -241,7 +308,15 @@ public class OrderService {
                 o.getPaymentStatus().name(), o.getAthleteCode(), o.getOrderDate());
     }
 
-    /** Shared by every DTO mapper above and by AthleteService's dashboard — one place builds the line-item list. */
+    /**
+     * Converts an order's items into their DTO shape. Package-private and
+     * static so {@link AthleteService#getDashboard} can reuse this exact
+     * same line-item mapping for the athlete dashboard, instead of
+     * duplicating the mapping logic in two places.
+     *
+     * @param o the order whose items should be converted
+     * @return the order's items as DTOs
+     */
     static List<OrderLineItemDto> toLineItemDtos(Order o) {
         return o.getItems().stream()
                 .map(i -> new OrderLineItemDto(

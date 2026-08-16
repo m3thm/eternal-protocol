@@ -12,14 +12,19 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 /**
- * The core of the "one login endpoint, three tables" decision: given an
- * email, look it up as a Customer, then Athlete, then Admin, and wrap
- * whichever one matches in a common AppUserDetails carrying the role.
- *
- * Guest customers (passwordHash == null) are deliberately skipped here —
- * they have no credentials to log in with, so they should never resolve to
- * a loadable user; a guest checkout customer trying to "log in" with their
- * email should just get "no account found", not a crash.
+ * Looks up a user by email across all three account types, for Spring
+ * Security to use during login.
+ * <p>
+ * This app has a single login endpoint shared by customers, athletes, and
+ * admins, even though they live in three separate database tables. Given
+ * an email, this service checks the Customer table, then Athlete, then
+ * Admin, and wraps whichever one matches in a common {@link AppUserDetails}
+ * that carries the matched role.
+ * <p>
+ * Guest customers (customers with no password set) are deliberately
+ * skipped — they have no login credentials, so trying to log in with a
+ * guest checkout email should simply result in "no account found", not an
+ * error.
  */
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -28,6 +33,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final AthleteRepository athleteRepository;
     private final AdminRepository adminRepository;
 
+    /**
+     * @param customerRepository access to customer accounts
+     * @param athleteRepository  access to athlete accounts
+     * @param adminRepository    access to admin accounts
+     */
     public CustomUserDetailsService(CustomerRepository customerRepository,
                                      AthleteRepository athleteRepository,
                                      AdminRepository adminRepository) {
@@ -36,6 +46,14 @@ public class CustomUserDetailsService implements UserDetailsService {
         this.adminRepository = adminRepository;
     }
 
+    /**
+     * Finds the account matching this email, checking customers first,
+     * then athletes, then admins.
+     *
+     * @param email the login email to look up
+     * @return the matched user, wrapped with their role
+     * @throws UsernameNotFoundException if no account exists for this email
+     */
     @Override
     public UserDetails loadUserByUsername(String email) {
         return customerRepository.findByEmail(email)

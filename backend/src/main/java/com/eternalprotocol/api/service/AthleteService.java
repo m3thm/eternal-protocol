@@ -16,6 +16,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Business logic for discount code validation, an athlete's own dashboard,
+ * and admin management of athletes and their commissions.
+ */
 @Service
 public class AthleteService {
 
@@ -23,6 +27,11 @@ public class AthleteService {
     private final CommissionRepository commissionRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * @param athleteRepository    access to athlete data
+     * @param commissionRepository access to commission data
+     * @param passwordEncoder      hashes new athlete passwords
+     */
     public AthleteService(AthleteRepository athleteRepository,
                            CommissionRepository commissionRepository,
                            PasswordEncoder passwordEncoder) {
@@ -31,7 +40,13 @@ public class AthleteService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    /** Public endpoint — used for the live discount preview on the checkout page. */
+    /**
+     * Checks whether a discount code exists and is active. Used by the
+     * checkout page's live discount preview as a customer types a code.
+     *
+     * @param code the code to check
+     * @return whether the code is valid, and its discount percentage
+     */
     public AthleteCodeValidationDto validateCode(String code) {
         return athleteRepository.findByAthleteCodeIgnoreCase(code)
                 .filter(Athlete::isActive)
@@ -40,9 +55,15 @@ public class AthleteService {
     }
 
     /**
-     * Builds the athlete's own dashboard. `athleteId` must come from the
-     * JWT (SecurityContextHolder), never a client-supplied path variable —
-     * see AthleteController — so one athlete can never view another's data.
+     * Builds an athlete's own dashboard: their commission totals and
+     * order history. {@code athleteId} must always come from the verified
+     * JWT (see {@code CurrentUser} / {@code AthleteController}), never
+     * from a client-supplied path variable — otherwise one athlete could
+     * view another athlete's dashboard just by guessing an ID.
+     *
+     * @param athleteId athlete's database ID, taken from the JWT
+     * @return the athlete's dashboard totals and order list
+     * @throws ResourceNotFoundException if no athlete exists with this ID
      */
     @Transactional(readOnly = true)
     public AthleteDashboardDto getDashboard(Long athleteId) {
@@ -75,6 +96,13 @@ public class AthleteService {
                 commissions.size(), salesGenerated, earned, paid, pending, orderSummaries);
     }
 
+    /**
+     * Sums the commission amount of every commission in a given status.
+     *
+     * @param commissions the commissions to sum
+     * @param status      status to filter by before summing
+     * @return the total amount for commissions in that status
+     */
     private BigDecimal sumByStatus(List<Commission> commissions, CommissionStatus status) {
         return commissions.stream()
                 .filter(c -> c.getCommissionStatus() == status)
@@ -82,12 +110,23 @@ public class AthleteService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    // ---- Admin: athlete management ----
-
+    /**
+     * Gets every athlete account, for the admin dashboard.
+     *
+     * @return all athletes
+     */
     public List<AthleteDto> getAllAthletes() {
         return athleteRepository.findAll().stream().map(this::toDto).toList();
     }
 
+    /**
+     * Creates a new athlete account.
+     *
+     * @param request new athlete's details
+     * @return the created athlete
+     * @throws EmailAlreadyInUseException if the email is already registered
+     * @throws IllegalArgumentException   if the athlete code is already taken
+     */
     public AthleteDto createAthlete(CreateAthleteRequestDto request) {
         if (athleteRepository.existsByEmail(request.email())) {
             throw new EmailAlreadyInUseException("An account with this email already exists");
@@ -107,6 +146,15 @@ public class AthleteService {
         return toDto(athleteRepository.save(athlete));
     }
 
+    /**
+     * Updates an existing athlete's commission rate and/or active status.
+     * Any field left null in the request is left unchanged.
+     *
+     * @param id      athlete's database ID
+     * @param request fields to change
+     * @return the updated athlete
+     * @throws ResourceNotFoundException if no athlete exists with this ID
+     */
     public AthleteDto updateAthlete(Long id, UpdateAthleteRequestDto request) {
         Athlete athlete = athleteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Athlete not found: " + id));
@@ -121,8 +169,12 @@ public class AthleteService {
         return toDto(athleteRepository.save(athlete));
     }
 
-    // ---- Admin: commission management ----
-
+    /**
+     * Gets every commission in the system, optionally filtered by status.
+     *
+     * @param statusFilter status name to filter by (e.g. "EARNED"), or null/blank for all
+     * @return matching commissions
+     */
     @Transactional(readOnly = true)
     public List<CommissionDto> getAllCommissions(String statusFilter) {
         List<Commission> commissions;
@@ -135,6 +187,14 @@ public class AthleteService {
         return commissions.stream().map(this::toCommissionDto).toList();
     }
 
+    /**
+     * Marks a commission as paid out to its athlete.
+     *
+     * @param commissionId commission's database ID
+     * @return the updated commission
+     * @throws ResourceNotFoundException if no commission exists with this ID
+     * @throws IllegalArgumentException  if the commission isn't currently in EARNED status
+     */
     @Transactional
     public CommissionDto markCommissionPaid(Long commissionId) {
         Commission commission = commissionRepository.findById(commissionId)
@@ -151,11 +211,23 @@ public class AthleteService {
         return toCommissionDto(commissionRepository.save(commission));
     }
 
+    /**
+     * Converts a database entity into its public-facing DTO shape.
+     *
+     * @param a the entity to convert
+     * @return the equivalent DTO
+     */
     private AthleteDto toDto(Athlete a) {
         return new AthleteDto(a.getId(), a.getName(), a.getEmail(), a.getAthleteCode(),
                 a.getCommissionRate(), a.isActive());
     }
 
+    /**
+     * Converts a database entity into its public-facing DTO shape.
+     *
+     * @param c the entity to convert
+     * @return the equivalent DTO
+     */
     private CommissionDto toCommissionDto(Commission c) {
         return new CommissionDto(c.getId(), c.getAthlete().getName(), c.getAthlete().getAthleteCode(),
                 c.getOrder().getId(), c.getCommissionAmount(), c.getCommissionStatus().name(), c.getPaidDate());

@@ -17,6 +17,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+/**
+ * REST endpoints for browsing the storefront and, for admins, managing
+ * products and their photo galleries.
+ * <p>
+ * Read endpoints (GET) are public so anyone can browse the shop. Write
+ * endpoints (POST/PUT/DELETE) are restricted to the ADMIN role — see the
+ * rules in {@code SecurityConfig}.
+ */
 @RestController
 @RequestMapping("/api/products")
 public class ProductController {
@@ -25,6 +33,11 @@ public class ProductController {
     private final ImageUploadService imageUploadService;
     private final ProductImageService productImageService;
 
+    /**
+     * @param productService      product CRUD and search logic
+     * @param imageUploadService  handles raw file uploads to Cloudinary
+     * @param productImageService manages a product's photo gallery
+     */
     public ProductController(ProductService productService, ImageUploadService imageUploadService,
                               ProductImageService productImageService) {
         this.productService = productService;
@@ -32,8 +45,19 @@ public class ProductController {
         this.productImageService = productImageService;
     }
 
-    // Public — the storefront's category pages (MEN'S/WOMEN'S/ACCESSORIES,
-    // each with colour/size filters) and the PDP's variant lookup both use this.
+    /**
+     * Public. Lists products, optionally filtered. Powers both the
+     * category pages (MEN'S/WOMEN'S/ACCESSORIES with colour/size filters)
+     * and the product detail page's variant lookup. Any filter left out is
+     * simply not applied.
+     *
+     * @param colour      colour to filter by, optional
+     * @param size        size to filter by, optional
+     * @param styleCode   style code to filter by, optional
+     * @param category    top-level category to filter by, optional
+     * @param subCategory subcategory to filter by, optional
+     * @return matching products
+     */
     @GetMapping
     public ResponseEntity<List<ProductDto>> getAllProducts(
             @RequestParam(required = false) String colour,
@@ -46,31 +70,60 @@ public class ProductController {
 
     /**
      * Public. Distinct subcategories that currently have products within
-     * one category — what the navbar's MEN'S/WOMEN'S/ACCESSORIES dropdowns
-     * show. Only ever lists subcategories that actually exist right now,
-     * same principle as the colour/size filter options on the shop page.
+     * one category — powers the navbar's per-category dropdown. Only ever
+     * lists subcategories that actually exist right now, the same way the
+     * shop page's colour/size filter options work.
+     *
+     * @param category category to look up subcategories for
+     * @return distinct subcategory names
      */
     @GetMapping("/subcategories")
     public ResponseEntity<List<String>> getSubCategories(@RequestParam ProductCategory category) {
         return ResponseEntity.ok(productService.getSubCategories(category));
     }
 
+    /**
+     * Public. Gets a single product variant by ID.
+     *
+     * @param id product variant's ID
+     * @return the matching product
+     */
     @GetMapping("/{id}")
     public ResponseEntity<ProductDto> getProductById(@PathVariable Long id) {
         return ResponseEntity.ok(productService.getProductById(id));
     }
 
-    // Admin only — locked down in SecurityConfig, consumed by the admin dashboard UI.
+    /**
+     * Admin only. Creates a new product variant.
+     *
+     * @param request new product's details
+     * @return the created product
+     */
     @PostMapping
     public ResponseEntity<ProductDto> createProduct(@Valid @RequestBody ProductRequestDto request) {
         return ResponseEntity.ok(productService.createProduct(request));
     }
 
+    /**
+     * Admin only. Updates an existing product variant.
+     *
+     * @param id      product variant's ID
+     * @param request updated product details
+     * @return the updated product
+     */
     @PutMapping("/{id}")
     public ResponseEntity<ProductDto> updateProduct(@PathVariable Long id, @Valid @RequestBody ProductRequestDto request) {
         return ResponseEntity.ok(productService.updateProduct(id, request));
     }
 
+    /**
+     * Admin only. Permanently deletes a product variant. Fails if the
+     * product is referenced by any past order — see
+     * {@code ProductInUseException}.
+     *
+     * @param id product variant's ID
+     * @return empty 204 response
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
@@ -78,13 +131,15 @@ public class ProductController {
     }
 
     /**
-     * Admin only. Uploads a product image to Cloudinary and returns its
-     * public URL plus its Cloudinary public_id — the frontend then attaches
-     * both to a style+colour's gallery via POST .../images. Deliberately a
-     * separate step rather than baked into create/update: it lets the admin
-     * see the uploaded image before submitting the rest of the form, and
-     * keeps the (potentially large, binary) upload request separate from
-     * the (small, JSON) product-details request.
+     * Admin only. Uploads a raw image file to Cloudinary and returns its
+     * public URL and Cloudinary ID. This is a separate step from attaching
+     * the image to a product ({@link #addImage}) — it lets the admin
+     * preview the uploaded photo before submitting the rest of the form,
+     * and keeps the large binary upload request separate from the small
+     * JSON "attach this image" request.
+     *
+     * @param file the image file to upload
+     * @return the uploaded image's URL and Cloudinary ID
      */
     @PostMapping(value = "/upload-image", consumes = "multipart/form-data")
     public ResponseEntity<ImageUploadResponseDto> uploadImage(@RequestParam("file") MultipartFile file) {
@@ -92,11 +147,13 @@ public class ProductController {
         return ResponseEntity.ok(new ImageUploadResponseDto(result.url(), result.publicId()));
     }
 
-    // ---- Product image gallery (multiple images per style+colour, for the PDP carousel) ----
-
     /**
-     * Public. Every image for every colour of this style, in carousel order
-     * within each colour. Frontend groups the flat list by `colour`.
+     * Public. Gets every gallery image for every colour of a style, in
+     * display order within each colour. The frontend groups the flat list
+     * by colour to build each colour's photo carousel.
+     *
+     * @param styleCode style to fetch images for
+     * @return all images for that style
      */
     @GetMapping("/style/{styleCode}/images")
     public ResponseEntity<List<ProductImageDto>> getImagesForStyle(@PathVariable String styleCode) {
@@ -104,10 +161,12 @@ public class ProductController {
     }
 
     /**
-     * Admin only. Call /api/products/upload-image first to get the imageUrl
-     * (and publicId), then attach it to this style+colour's gallery with
-     * this endpoint. The cover photo for a product now comes from here —
-     * see setCoverImage — rather than a separate manual upload.
+     * Admin only. Attaches an already-uploaded image (from
+     * {@link #uploadImage}) to a style/colour's gallery.
+     *
+     * @param styleCode style to attach the image to
+     * @param request   the uploaded image's URL/ID and target colour
+     * @return the newly added gallery image
      */
     @PostMapping("/style/{styleCode}/images")
     public ResponseEntity<ProductImageDto> addImage(@PathVariable String styleCode,
@@ -115,8 +174,13 @@ public class ProductController {
         return ResponseEntity.ok(productImageService.addImage(styleCode, request));
     }
 
-    // Admin only — locked down in SecurityConfig alongside the other DELETE /api/products/** rules.
-    // Also deletes the underlying Cloudinary asset (see ProductImageService.deleteImage).
+    /**
+     * Admin only. Permanently deletes a gallery image, including its file
+     * on Cloudinary.
+     *
+     * @param imageId image's database ID
+     * @return empty 204 response
+     */
     @DeleteMapping("/images/{imageId}")
     public ResponseEntity<Void> deleteImage(@PathVariable Long imageId) {
         productImageService.deleteImage(imageId);
@@ -124,17 +188,26 @@ public class ProductController {
     }
 
     /**
-     * Admin only. Marks this gallery image as the cover for its style+colour
-     * — the photo shown on the shop grid and as the PDP carousel's first
-     * frame. Replaces the old separate "upload a cover photo" flow: the
-     * cover is just one of the gallery photos, chosen here.
+     * Admin only. Marks a gallery image as the cover photo for its
+     * style/colour — the image shown on the shop grid and as the first
+     * photo on the product detail page.
+     *
+     * @param imageId image's database ID
+     * @return the updated image
      */
     @PutMapping("/images/{imageId}/cover")
     public ResponseEntity<ProductImageDto> setCoverImage(@PathVariable Long imageId) {
         return ResponseEntity.ok(productImageService.setCoverImage(imageId));
     }
 
-    /** Admin only. Body is the full list of image IDs for this colour, in the new order. */
+    /**
+     * Admin only. Changes the display order of one colour's photo gallery.
+     *
+     * @param styleCode style being reordered
+     * @param colour    colour being reordered
+     * @param request   image IDs in their new desired order
+     * @return the gallery in its new order
+     */
     @PutMapping("/style/{styleCode}/images/reorder")
     public ResponseEntity<List<ProductImageDto>> reorderImages(@PathVariable String styleCode,
                                                                  @RequestParam String colour,

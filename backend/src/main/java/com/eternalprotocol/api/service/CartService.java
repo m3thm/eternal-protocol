@@ -15,15 +15,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * Persisted cart, scoped to a logged-in customer only (guests keep an
- * entirely client-side cart — see frontend CartContext, nothing here is
- * touched until someone with an account is authenticated).
- *
- * Every method is @Transactional: CartItem.product is a LAZY association,
- * and toDto() reads it — with `open-in-view: false`, that's only safe
- * while the originating JPA session is still open, which requires the DTO
- * mapping to happen inside the same transactional method rather than after
- * the repository call returns.
+ * Business logic for a logged-in customer's saved cart.
+ * <p>
+ * Only applies to logged-in customers — guests keep an entirely
+ * browser-side cart on the frontend, and nothing here is touched until
+ * someone with an account is authenticated.
+ * <p>
+ * Every method is {@code @Transactional}. {@code CartItem.product} is a
+ * "lazy" association, meaning it's only fetched from the database when
+ * actually read — and {@link #toDto} reads it while building the
+ * response. With {@code open-in-view: false} in this app's configuration,
+ * that lazy read is only safe while the database session from the
+ * repository call is still open, so the whole method — including the DTO
+ * conversion — must run inside one transaction.
  */
 @Service
 public class CartService {
@@ -32,6 +36,11 @@ public class CartService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
 
+    /**
+     * @param cartItemRepository access to cart line data
+     * @param customerRepository access to customer data
+     * @param productRepository  access to product data
+     */
     public CartService(CartItemRepository cartItemRepository,
                         CustomerRepository customerRepository,
                         ProductRepository productRepository) {
@@ -40,12 +49,27 @@ public class CartService {
         this.productRepository = productRepository;
     }
 
+    /**
+     * Gets a customer's full cart.
+     *
+     * @param customerId customer's database ID
+     * @return the customer's cart lines
+     */
     @Transactional(readOnly = true)
     public List<CartItemDto> getCart(Long customerId) {
         return cartItemRepository.findByCustomerId(customerId).stream().map(this::toDto).toList();
     }
 
-    /** Adds a new line, or increments quantity if the same product/size/colour is already in the cart. */
+    /**
+     * Adds an item to the cart. If the same product/size/colour is
+     * already present, its quantity is increased instead of creating a
+     * duplicate line.
+     *
+     * @param customerId customer's database ID
+     * @param request    item to add
+     * @return the added or updated cart line
+     * @throws ResourceNotFoundException if the customer or product doesn't exist
+     */
     @Transactional
     public CartItemDto addOrUpdateItem(Long customerId, CartItemRequestDto request) {
         Customer customer = customerRepository.findById(customerId)
@@ -61,6 +85,13 @@ public class CartService {
         return toDto(cartItemRepository.save(item));
     }
 
+    /**
+     * Removes one line from a customer's cart.
+     *
+     * @param customerId customer's database ID
+     * @param itemId     cart line's ID
+     * @throws ResourceNotFoundException if the cart line doesn't exist or doesn't belong to this customer
+     */
     @Transactional
     public void removeItem(Long customerId, Long itemId) {
         CartItem item = cartItemRepository.findByIdAndCustomerId(itemId, customerId)
@@ -68,9 +99,17 @@ public class CartService {
         cartItemRepository.delete(item);
     }
 
-    /** Sets the line to an exact quantity — distinct from addOrUpdateItem,
-     *  which increments. This is what a "-"/"+" stepper or a typed quantity
-     *  input on the cart page should call. */
+    /**
+     * Sets a cart line to an exact quantity. Different from
+     * {@link #addOrUpdateItem}, which increments — this is what a "+"/"-"
+     * stepper or a typed quantity field on the cart page should call.
+     *
+     * @param customerId customer's database ID
+     * @param itemId     cart line's ID
+     * @param quantity   the new exact quantity
+     * @return the updated cart line
+     * @throws ResourceNotFoundException if the cart line doesn't exist or doesn't belong to this customer
+     */
     @Transactional
     public CartItemDto updateQuantity(Long customerId, Long itemId, int quantity) {
         CartItem item = cartItemRepository.findByIdAndCustomerId(itemId, customerId)
@@ -79,11 +118,23 @@ public class CartService {
         return toDto(cartItemRepository.save(item));
     }
 
+    /**
+     * Deletes every line in a customer's cart, e.g. right after a
+     * successful checkout.
+     *
+     * @param customerId customer's database ID
+     */
     @Transactional
     public void clearCart(Long customerId) {
         cartItemRepository.deleteByCustomerId(customerId);
     }
 
+    /**
+     * Converts a database entity into its public-facing DTO shape.
+     *
+     * @param item the entity to convert
+     * @return the equivalent DTO
+     */
     private CartItemDto toDto(CartItem item) {
         return new CartItemDto(
                 item.getId(), item.getProduct().getId(), item.getProduct().getName(),

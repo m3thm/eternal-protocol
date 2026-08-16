@@ -9,11 +9,12 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 /**
- * One line within an Order — a specific product/size/colour and how many
- * of it. An Order has one-to-many of these, which is what actually lets a
- * single checkout (and single PayHere payment) cover multiple distinct
- * products and quantities > 1, instead of the old one-product-per-order
- * model.
+ * Database entity for one product line within an {@link Order} — a
+ * specific product, size, colour, and quantity.
+ * <p>
+ * Maps onto the {@code order_items} table. An order has many of these,
+ * which is what lets a single checkout (and single PayHere payment) cover
+ * several different products and quantities greater than one.
  */
 @Entity
 @Table(name = "order_items")
@@ -23,33 +24,52 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class OrderItem {
 
+    /** Auto-generated primary key. */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** The order this line belongs to. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    /** The product variant purchased. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
+    /** Size purchased, e.g. "M". */
     @Column(nullable = false)
     private String size;
 
+    /** Colour purchased, e.g. "Black". */
     @Column(nullable = false)
     private String colour;
 
+    /** Number of units purchased. */
     @Column(nullable = false)
     private Integer quantity;
 
-    // Snapshot of Product.price at the moment of order — same reasoning as
-    // the old Order.productPrice field: if the admin changes the price
-    // later, past orders must still reflect what the customer actually paid.
+    /**
+     * The product's price at the moment this order was placed, copied from
+     * {@link Product#getPrice()}. Stored separately (not looked up live)
+     * so that if an admin changes the product's price later, past orders
+     * still show what the customer actually paid at the time.
+     */
     @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal unitPrice;
 
+    /**
+     * Creates a new order line.
+     *
+     * @param order     the order this line belongs to
+     * @param product   product variant purchased
+     * @param size      size purchased
+     * @param colour    colour purchased
+     * @param quantity  number of units
+     * @param unitPrice price per unit at time of purchase
+     */
     public OrderItem(Order order, Product product, String size, String colour, Integer quantity, BigDecimal unitPrice) {
         this.order = order;
         this.product = product;
@@ -59,7 +79,14 @@ public class OrderItem {
         this.unitPrice = unitPrice;
     }
 
-    /** Not a persisted column — always derived, so it can never drift out of sync with quantity/unitPrice. */
+    /**
+     * Total price for this line, calculated on the fly as
+     * {@code unitPrice × quantity}. Marked {@code @Transient} so it is
+     * never stored as its own database column — it is always derived, so
+     * it can never fall out of sync with the values it's calculated from.
+     *
+     * @return the line total
+     */
     @Transient
     public BigDecimal getLineTotal() {
         return unitPrice.multiply(BigDecimal.valueOf(quantity));

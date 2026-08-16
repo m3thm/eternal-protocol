@@ -9,26 +9,38 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * Creates exactly one admin login on startup, from ADMIN_BOOTSTRAP_EMAIL /
- * ADMIN_BOOTSTRAP_PASSWORD in .env — and only if the admins table is still
- * empty. This replaces the old DataSeeder, which hardcoded
- * admin@eternalprotocol.com / admin123 directly in source (fine for a
- * throwaway H2 demo, not something you want sitting in git history once
- * you're on a real MySQL database people can actually reach).
+ * Creates the very first admin account automatically when the app starts,
+ * so there's a way to log in without ever hardcoding a password in the
+ * source code.
  * <p>
- * No sample products are seeded any more either — once you've logged in
- * with the bootstrapped admin, add real products through the admin
- * dashboard UI (Products page → "New product").
+ * Reads {@code ADMIN_BOOTSTRAP_EMAIL} / {@code ADMIN_BOOTSTRAP_PASSWORD}
+ * from the environment (see {@code .env}), and only creates an admin if the
+ * {@code admins} table is still completely empty — it will never overwrite
+ * or duplicate an existing admin.
  * <p>
- * To promote a second admin later without going through this bootstrap
- * flow again, insert directly into the `admins` table with a bcrypt hash
- * (e.g. generate one via any bcrypt tool, or temporarily set these two env
- * vars again — the check below only skips seeding once an admin already
- * exists, so it's safe to leave the vars in .env permanently).
+ * No sample products are created here. Once logged in with the bootstrapped
+ * admin account, add real products through the admin dashboard UI
+ * (Products page → "New product").
+ * <p>
+ * To add a second admin later, either insert a row directly into the
+ * {@code admins} table with a bcrypt-hashed password, or simply leave the
+ * bootstrap environment variables set — this class only skips creating an
+ * admin once one already exists, so it's safe to leave them in {@code .env}
+ * permanently.
  */
 @Configuration
 public class AdminBootstrap {
 
+    /**
+     * Registers a {@link CommandLineRunner}, a piece of code Spring Boot
+     * automatically runs once, right after the application starts up.
+     *
+     * @param adminRepository   used to check for and save admin accounts
+     * @param passwordEncoder   used to hash the bootstrap password before saving
+     * @param bootstrapEmail    admin email from configuration, blank if not set
+     * @param bootstrapPassword admin password from configuration, blank if not set
+     * @return the startup task that creates the admin account
+     */
     @Bean
     public CommandLineRunner bootstrapAdmin(AdminRepository adminRepository,
                                              PasswordEncoder passwordEncoder,

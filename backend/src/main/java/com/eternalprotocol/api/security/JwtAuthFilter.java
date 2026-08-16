@@ -15,15 +15,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Runs once per request, before any controller. If a valid
- * `Authorization: Bearer <token>` header is present, resolves the user via
- * CustomUserDetailsService and puts them in the SecurityContext so
- * SecurityConfig's role checks (and @PreAuthorize, and
- * SecurityContextHolder-based "who am I" lookups in services) all work.
- *
- * If there's no header, or it's invalid/expired, this filter just does
- * nothing and lets the request continue unauthenticated — SecurityConfig
- * is what actually rejects it for protected routes with a 401/403.
+ * Checks every incoming request for a login token, before it reaches any
+ * controller.
+ * <p>
+ * A "filter" in Spring runs on every HTTP request, ahead of the actual
+ * endpoint code. This one looks for an {@code Authorization: Bearer <token>}
+ * header. If a valid token is found, it resolves the user via
+ * {@link CustomUserDetailsService} and stores them in Spring Security's
+ * {@code SecurityContext}, which is what lets role checks elsewhere in the
+ * app (like {@code @PreAuthorize} and {@code SecurityConfig}) know who is
+ * making the request.
+ * <p>
+ * If there's no header, or it's invalid or expired, this filter does
+ * nothing and simply lets the request continue as unauthenticated —
+ * {@code SecurityConfig} is what actually blocks unauthenticated access to
+ * protected endpoints with a 401/403 response.
  */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -31,11 +37,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
 
+    /**
+     * @param jwtUtil            helper for reading and validating tokens
+     * @param userDetailsService looks up the user a token's email belongs to
+     */
     public JwtAuthFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
     }
 
+    /**
+     * Runs once per incoming request. Reads and validates any bearer
+     * token present, and if valid, marks the request as authenticated
+     * before passing it along the filter chain.
+     *
+     * @param request     the incoming HTTP request
+     * @param response    the outgoing HTTP response
+     * @param filterChain the rest of the request-processing pipeline
+     */
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                      @NonNull HttpServletResponse response,
@@ -64,8 +83,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception ex) {
-            // Malformed/expired token, or the user no longer exists — treat
-            // the request as unauthenticated rather than throwing a 500.
+            // Malformed or expired token, or the user no longer exists —
+            // treat the request as unauthenticated instead of failing with
+            // a server error.
             SecurityContextHolder.clearContext();
         }
 

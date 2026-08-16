@@ -12,6 +12,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * REST endpoints for placing orders and handling PayHere payment.
+ * <p>
+ * These endpoints are public (no login required) since guest checkout must
+ * always work, but they also check for an optional logged-in customer so
+ * an order can still be linked to an account when one exists.
+ */
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
@@ -19,17 +26,25 @@ public class OrderController {
     private final OrderService orderService;
     private final PaymentService paymentService;
 
+    /**
+     * @param orderService   creates orders and calculates totals/discounts
+     * @param paymentService verifies PayHere payment signatures
+     */
     public OrderController(OrderService orderService, PaymentService paymentService) {
         this.orderService = orderService;
         this.paymentService = paymentService;
     }
 
     /**
-     * Public — works for guest checkout. If the request happens to carry a
-     * valid customer JWT (frontend's axiosClient attaches it automatically
-     * whenever a token exists), the order gets linked to that account and
-     * shows up in their order history; otherwise a fresh guest Customer row
-     * is created, exactly as before accounts existed.
+     * Places a new order (checkout). Works for guests and logged-in
+     * customers alike: if the request carries a valid customer JWT, the
+     * order is linked to that account and appears in their order history;
+     * otherwise a fresh guest customer record is created for just this
+     * order.
+     *
+     * @param request        checkout details: items, delivery info, optional athlete code
+     * @param authentication the current request's login info, if any
+     * @return the created order's ID, total, and PayHere payment URL
      */
     @PostMapping
     public ResponseEntity<OrderResponseDto> createOrder(@Valid @RequestBody OrderRequestDto request,
@@ -42,22 +57,45 @@ public class OrderController {
         return ResponseEntity.ok(orderService.createOrder(request, loggedInCustomerId));
     }
 
+    /**
+     * Gets full details of one order, used for the order confirmation page.
+     *
+     * @param id order's database ID
+     * @return the order's full details
+     */
     @GetMapping("/{id}")
     public ResponseEntity<OrderDetailDto> getOrder(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.getOrderDetail(id));
     }
 
-    /** Public — the browser is sent here right after checkout; it auto-submits to PayHere. */
+    /**
+     * Returns a small self-submitting HTML page that redirects the
+     * customer's browser straight into PayHere's payment form. The
+     * frontend sends the browser here right after checkout completes.
+     *
+     * @param id order to pay for
+     * @return an HTML page that auto-submits to PayHere
+     */
     @GetMapping(value = "/{id}/checkout-redirect", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> checkoutRedirect(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.buildCheckoutRedirectHtml(id));
     }
 
     /**
-     * PayHere's server-to-server webhook (notify_url), called directly by
-     * PayHere — not by our own frontend. Verifies the md5 signature before
-     * trusting the "payment succeeded" claim; anyone could otherwise POST a
-     * fake success here.
+     * PayHere's server-to-server payment webhook. Called directly by
+     * PayHere itself (not by this app's own frontend) once a payment
+     * finishes. The md5 signature is verified before the "payment
+     * succeeded" claim is trusted — without that check, anyone could send
+     * a fake success request here.
+     *
+     * @param id              order this payment is for
+     * @param merchantId      PayHere merchant ID from the callback
+     * @param orderId         this app's order reference, echoed back by PayHere
+     * @param payhereAmount   amount PayHere recorded as paid
+     * @param payhereCurrency currency PayHere recorded
+     * @param statusCode      PayHere's payment result code ("2" = success)
+     * @param md5sig          PayHere's signature, used to verify the callback is genuine
+     * @return empty 200 response, always — PayHere just needs an acknowledgement
      */
     @PostMapping("/{id}/confirm-payment")
     public ResponseEntity<Void> confirmPayment(
