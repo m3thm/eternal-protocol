@@ -5,7 +5,7 @@ customers shop for products, optionally checking out under an athlete's referral
 code (which earns that athlete a commission), and admins manage the catalog, orders,
 athletes, and commission payouts.
 
-## Monorepo layout
+## Repository Layout
 
 ```
 eternal-protocol/

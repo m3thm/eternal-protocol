@@ -1,7 +1,6 @@
 # Backend API Reference
 
-Every backend REST endpoint as currently implemented, organized by the four module
-splits used to divide work across the group (see the root and backend READMEs for
+Every backend REST endpoint as currently implemented, organized into 4 modules (see the root and backend READMEs for
 how these map to files/classes).
 
 ---
