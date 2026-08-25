@@ -130,6 +130,24 @@ public class CartService {
     }
 
     /**
+     * Gets a single cart line, scoped to its owning customer. Used by the
+     * cart {@link com.eternalprotocol.api.command.CartCommand} classes to
+     * snapshot a line's state before mutating it, so an undo can restore
+     * exactly what was there before.
+     *
+     * @param customerId customer's database ID
+     * @param itemId     cart line's ID
+     * @return the matching cart line
+     * @throws ResourceNotFoundException if the cart line doesn't exist or doesn't belong to this customer
+     */
+    @Transactional(readOnly = true)
+    public CartItemDto getCartItem(Long customerId, Long itemId) {
+        CartItem item = cartItemRepository.findByIdAndCustomerId(itemId, customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found"));
+        return toDto(item);
+    }
+
+    /**
      * Converts a database entity into its public-facing DTO shape.
      *
      * @param item the entity to convert

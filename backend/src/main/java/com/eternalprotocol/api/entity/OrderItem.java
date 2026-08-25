@@ -1,10 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 
@@ -15,13 +11,14 @@ import java.math.BigDecimal;
  * Maps onto the {@code order_items} table. An order has many of these,
  * which is what lets a single checkout (and single PayHere payment) cover
  * several different products and quantities greater than one.
+ * <p>
+ * <b>Composition:</b> the {@code order} field below is the "child" side of
+ * the whole-part relationship declared on {@link Order#getItems()} — see
+ * that class's JavaDoc for the {@code cascade}/{@code orphanRemoval} side
+ * of the same relationship.
  */
 @Entity
 @Table(name = "order_items")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class OrderItem {
 
     /** Auto-generated primary key. */
@@ -60,6 +57,10 @@ public class OrderItem {
     @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal unitPrice;
 
+    /** Default constructor, required by JPA. */
+    public OrderItem() {
+    }
+
     /**
      * Creates a new order line.
      *
@@ -76,6 +77,62 @@ public class OrderItem {
         this.size = size;
         this.colour = colour;
         this.quantity = quantity;
+        this.unitPrice = unitPrice;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Order getOrder() {
+        return order;
+    }
+
+    public void setOrder(Order order) {
+        this.order = order;
+    }
+
+    public Product getProduct() {
+        return product;
+    }
+
+    public void setProduct(Product product) {
+        this.product = product;
+    }
+
+    public String getSize() {
+        return size;
+    }
+
+    public void setSize(String size) {
+        this.size = size;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    public void setColour(String colour) {
+        this.colour = colour;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice) {
         this.unitPrice = unitPrice;
     }
 

@@ -1,10 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 /**
  * Database entity for a single gallery image belonging to one colour of
@@ -17,13 +13,15 @@ import lombok.Setter;
  * (styleCode, colour), which lets the product page swap its whole image
  * set the moment a shopper picks a different colour, without duplicating
  * the same image for every size.
+ * <p>
+ * <b>Dependency:</b> {@link com.eternalprotocol.api.service.ProductImageService}
+ * uses a ProductImage only as a local variable and method parameter while
+ * handling one request — it never holds a ProductImage as one of its own
+ * fields — which is the textbook definition of dependency rather than
+ * association.
  */
 @Entity
 @Table(name = "product_images")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class ProductImage {
 
     /** Auto-generated primary key. */
@@ -66,4 +64,82 @@ public class ProductImage {
     /** Display order of this image within its colour's photo gallery, smallest shown first. */
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
+
+    /** Default constructor, required by JPA — also used throughout {@code ProductImageService}, which builds an image field-by-field via the setters below. */
+    public ProductImage() {
+    }
+
+    /**
+     * Convenience constructor for creating a fully-specified gallery image
+     * in one call.
+     *
+     * @param styleCode  style this image belongs to
+     * @param colour     colour this image belongs to
+     * @param imageUrl   public Cloudinary URL
+     * @param cover      whether this is the colour's cover image
+     * @param sortOrder  position within the gallery
+     */
+    public ProductImage(String styleCode, String colour, String imageUrl, boolean cover, Integer sortOrder) {
+        this.styleCode = styleCode;
+        this.colour = colour;
+        this.imageUrl = imageUrl;
+        this.cover = cover;
+        this.sortOrder = sortOrder;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getStyleCode() {
+        return styleCode;
+    }
+
+    public void setStyleCode(String styleCode) {
+        this.styleCode = styleCode;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    public void setColour(String colour) {
+        this.colour = colour;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public String getCloudinaryPublicId() {
+        return cloudinaryPublicId;
+    }
+
+    public void setCloudinaryPublicId(String cloudinaryPublicId) {
+        this.cloudinaryPublicId = cloudinaryPublicId;
+    }
+
+    public boolean isCover() {
+        return cover;
+    }
+
+    public void setCover(boolean cover) {
+        this.cover = cover;
+    }
+
+    public Integer getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
+    }
 }

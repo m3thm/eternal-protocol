@@ -1,10 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 /**
  * Database entity for one line of a logged-in customer's saved cart.
@@ -14,13 +10,14 @@ import lombok.Setter;
  * Guests (not logged in) keep their cart entirely in the browser on the
  * frontend — nothing is written here until a logged-in customer adds an
  * item.
+ * <p>
+ * <b>Aggregation:</b> a Customer "has" CartItems, but a CartItem is only
+ * ever read one at a time by ID here (there's no {@code List<CartItem>}
+ * field on {@link Customer}), so the relationship is expressed from the
+ * "many" side only, via the {@code customer} field below.
  */
 @Entity
 @Table(name = "cart_items")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class CartItem {
 
     /** Auto-generated primary key. */
@@ -56,6 +53,10 @@ public class CartItem {
     @Column(nullable = false)
     private Integer quantity = 1;
 
+    /** Default constructor, required by JPA. */
+    public CartItem() {
+    }
+
     /**
      * Creates a new cart line for a customer.
      *
@@ -70,6 +71,54 @@ public class CartItem {
         this.product = product;
         this.size = size;
         this.colour = colour;
+        this.quantity = quantity;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
+    }
+
+    public Product getProduct() {
+        return product;
+    }
+
+    public void setProduct(Product product) {
+        this.product = product;
+    }
+
+    public String getSize() {
+        return size;
+    }
+
+    public void setSize(String size) {
+        this.size = size;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    public void setColour(String colour) {
+        this.colour = colour;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
         this.quantity = quantity;
     }
 }

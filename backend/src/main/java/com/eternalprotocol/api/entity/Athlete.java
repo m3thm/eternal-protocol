@@ -1,10 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 
@@ -17,10 +13,6 @@ import java.math.BigDecimal;
  */
 @Entity
 @Table(name = "athletes")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class Athlete {
 
     /** Auto-generated primary key. */
@@ -56,4 +48,84 @@ public class Athlete {
     /** Whether this athlete's code can currently be used at checkout. */
     @Column(name = "active", nullable = false)
     private boolean active = true;
+
+    /** Default constructor, required by JPA. */
+    public Athlete() {
+    }
+
+    /**
+     * Creates a fully-specified athlete account.
+     *
+     * @param name           athlete's full name
+     * @param email          unique login email
+     * @param passwordHash   bcrypt-hashed password
+     * @param athleteCode    unique checkout referral code
+     * @param commissionRate discount/commission percentage
+     * @param active         whether the code is currently usable
+     */
+    public Athlete(String name, String email, String passwordHash, String athleteCode,
+                    BigDecimal commissionRate, boolean active) {
+        this.name = name;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.athleteCode = athleteCode;
+        this.commissionRate = commissionRate;
+        this.active = active;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public String getAthleteCode() {
+        return athleteCode;
+    }
+
+    public void setAthleteCode(String athleteCode) {
+        this.athleteCode = athleteCode;
+    }
+
+    public BigDecimal getCommissionRate() {
+        return commissionRate;
+    }
+
+    public void setCommissionRate(BigDecimal commissionRate) {
+        this.commissionRate = commissionRate;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }

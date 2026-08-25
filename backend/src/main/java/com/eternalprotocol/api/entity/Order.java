@@ -1,9 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,12 +16,16 @@ import java.util.List;
  * bought is a separate row in {@code items}. Discount and total amounts
  * live here (not per item) because an athlete discount code applies to the
  * whole order, not to individual lines.
+ * <p>
+ * <b>Composition:</b> an Order "owns" its OrderItems — a strong whole-part
+ * relationship. {@code cascade = CascadeType.ALL} and
+ * {@code orphanRemoval = true} below are what enforce that in code: an
+ * OrderItem is always created through {@link #addItem}, is never shared
+ * with another Order, and is deleted automatically the moment it is
+ * removed from this list or this Order itself is deleted.
  */
 @Entity
 @Table(name = "orders")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Order {
 
     /** Auto-generated primary key. */
@@ -32,7 +33,11 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** The customer who placed this order. */
+    /**
+     * The customer who placed this order.
+     * <b>Association:</b> an Order refers to a Customer that exists
+     * independently before and after this Order — neither owns the other.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
@@ -75,6 +80,10 @@ public class Order {
     @Column(name = "payhere_order_id", unique = true)
     private String payhereOrderId;
 
+    /** Default constructor, required by JPA. */
+    public Order() {
+    }
+
     /**
      * Creates a new order with total automatically calculated as
      * {@code subtotalAmount - discountAmount}.
@@ -104,5 +113,85 @@ public class Order {
     public void addItem(OrderItem item) {
         items.add(item);
         item.setOrder(this);
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
+    }
+
+    public List<OrderItem> getItems() {
+        return items;
+    }
+
+    public void setItems(List<OrderItem> items) {
+        this.items = items;
+    }
+
+    public BigDecimal getSubtotalAmount() {
+        return subtotalAmount;
+    }
+
+    public void setSubtotalAmount(BigDecimal subtotalAmount) {
+        this.subtotalAmount = subtotalAmount;
+    }
+
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public void setDiscountAmount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+
+    public BigDecimal getTotalAmount() {
+        return totalAmount;
+    }
+
+    public void setTotalAmount(BigDecimal totalAmount) {
+        this.totalAmount = totalAmount;
+    }
+
+    public OrderStatus getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(OrderStatus paymentStatus) {
+        this.paymentStatus = paymentStatus;
+    }
+
+    public String getAthleteCode() {
+        return athleteCode;
+    }
+
+    public void setAthleteCode(String athleteCode) {
+        this.athleteCode = athleteCode;
+    }
+
+    public LocalDateTime getOrderDate() {
+        return orderDate;
+    }
+
+    public void setOrderDate(LocalDateTime orderDate) {
+        this.orderDate = orderDate;
+    }
+
+    public String getPayhereOrderId() {
+        return payhereOrderId;
+    }
+
+    public void setPayhereOrderId(String payhereOrderId) {
+        this.payhereOrderId = payhereOrderId;
     }
 }
