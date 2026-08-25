@@ -1,5 +1,6 @@
 package com.eternalprotocol.api.service;
 
+import com.eternalprotocol.api.cache.AthleteCodeCache;
 import com.eternalprotocol.api.dto.*;
 import com.eternalprotocol.api.entity.Athlete;
 import com.eternalprotocol.api.entity.Commission;
@@ -42,16 +43,25 @@ public class AthleteService {
 
     /**
      * Checks whether a discount code exists and is active. Used by the
-     * checkout page's live discount preview as a customer types a code.
+     * checkout page's live discount preview as a customer types a code —
+     * a fast-repeating call for the same one or two codes, which is why
+     * this method checks {@link AthleteCodeCache} before ever touching the
+     * database, and populates it on a miss.
      *
      * @param code the code to check
      * @return whether the code is valid, and its discount percentage
      */
     public AthleteCodeValidationDto validateCode(String code) {
-        return athleteRepository.findByAthleteCodeIgnoreCase(code)
-                .filter(Athlete::isActive)
-                .map(a -> new AthleteCodeValidationDto(true, a.getAthleteCode(), a.getCommissionRate()))
-                .orElseGet(() -> AthleteCodeValidationDto.invalid(code));
+        AthleteCodeCache cache = AthleteCodeCache.getInstance();
+
+        return cache.get(code).orElseGet(() -> {
+            AthleteCodeValidationDto result = athleteRepository.findByAthleteCodeIgnoreCase(code)
+                    .filter(Athlete::isActive)
+                    .map(a -> new AthleteCodeValidationDto(true, a.getAthleteCode(), a.getCommissionRate()))
+                    .orElseGet(() -> AthleteCodeValidationDto.invalid(code));
+            cache.put(code, result);
+            return result;
+        });
     }
 
     /**
@@ -148,7 +158,12 @@ public class AthleteService {
 
     /**
      * Updates an existing athlete's commission rate and/or active status.
-     * Any field left null in the request is left unchanged.
+     * Any field left null in the request is left unchanged. Evicts this
+     * athlete's code from {@link AthleteCodeCache} afterward, since either
+     * change affects what {@link #validateCode} should return for it —
+     * without this, a customer could keep seeing a stale cached discount
+     * rate, or a deactivated code as still valid, for up to the cache's
+     * TTL after an admin changed it.
      *
      * @param id      athlete's database ID
      * @param request fields to change
@@ -166,7 +181,9 @@ public class AthleteService {
             athlete.setActive(request.active());
         }
 
-        return toDto(athleteRepository.save(athlete));
+        AthleteDto updated = toDto(athleteRepository.save(athlete));
+        AthleteCodeCache.getInstance().evict(athlete.getAthleteCode());
+        return updated;
     }
 
     /**

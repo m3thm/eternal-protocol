@@ -4,6 +4,7 @@ import com.eternalprotocol.api.dto.*;
 import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.InsufficientStockException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
+import com.eternalprotocol.api.factory.CustomerFactory;
 import com.eternalprotocol.api.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +40,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
-    private final CustomerRepository customerRepository;
+    private final CustomerFactory customerFactory;
     private final AthleteRepository athleteRepository;
     private final CommissionRepository commissionRepository;
     private final CartService cartService;
@@ -48,7 +49,7 @@ public class OrderService {
     /**
      * @param orderRepository      access to order data
      * @param productRepository    access to product data, for stock checks and pricing
-     * @param customerRepository   access to customer data
+     * @param customerFactory      resolves which customer a new order is attached to (Simple Factory — see that class)
      * @param athleteRepository    access to athlete data, for discount code lookup
      * @param commissionRepository access to commission data
      * @param cartService          clears a customer's saved cart after checkout
@@ -56,14 +57,14 @@ public class OrderService {
      */
     public OrderService(OrderRepository orderRepository,
                          ProductRepository productRepository,
-                         CustomerRepository customerRepository,
+                         CustomerFactory customerFactory,
                          AthleteRepository athleteRepository,
                          CommissionRepository commissionRepository,
                          CartService cartService,
                          PaymentService paymentService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
-        this.customerRepository = customerRepository;
+        this.customerFactory = customerFactory;
         this.athleteRepository = athleteRepository;
         this.commissionRepository = commissionRepository;
         this.cartService = cartService;
@@ -125,21 +126,11 @@ public class OrderService {
                     .orElse(null); // invalid/inactive code -> silently no discount, don't fail checkout
         }
 
-        // Resolve the customer: reuse the logged-in account if present,
-        // otherwise create a fresh guest row (mirrors pre-login behaviour).
-        Customer customer;
-        if (loggedInCustomerId != null) {
-            customer = customerRepository.findById(loggedInCustomerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
-            // Keep delivery info current with whatever was submitted at checkout.
-            customer.setName(request.customerName());
-            customer.setPhone(request.phone());
-            customer.setAddress(request.address());
-            customer = customerRepository.save(customer);
-        } else {
-            customer = customerRepository.save(
-                    new Customer(request.customerName(), request.phone(), request.address()));
-        }
+        // Resolve the customer via CustomerFactory (Simple Factory): reuse
+        // the logged-in account if present, otherwise create a fresh
+        // guest row — see that class for why this decision-and-construction
+        // logic lives in its own class rather than inline here.
+        Customer customer = customerFactory.resolveForCheckout(loggedInCustomerId, request);
 
         BigDecimal subtotal = request.items().stream()
                 .map(item -> productsById.get(item.productId()).getPrice()

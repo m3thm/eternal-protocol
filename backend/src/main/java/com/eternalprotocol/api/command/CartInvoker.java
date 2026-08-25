@@ -33,7 +33,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * running application (singleton scope by default). That is a different
  * mechanism from the classic Singleton pattern also covered in this
  * course: Spring reaches this behaviour through framework configuration,
- * not through a private constructor and a {@code getInstance()} method.
+ * not through a private constructor and a {@code getInstance()} method —
+ * contrast with {@link com.eternalprotocol.api.cache.AthleteCodeCache},
+ * which implements that classic pattern by hand.
  */
 @Component
 public class CartInvoker {

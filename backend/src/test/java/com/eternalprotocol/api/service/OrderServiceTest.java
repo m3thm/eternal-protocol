@@ -6,6 +6,7 @@ import com.eternalprotocol.api.dto.OrderResponseDto;
 import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.InsufficientStockException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
+import com.eternalprotocol.api.factory.CustomerFactory;
 import com.eternalprotocol.api.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
     @Mock private ProductRepository productRepository;
-    @Mock private CustomerRepository customerRepository;
+    @Mock private CustomerFactory customerFactory;
     @Mock private AthleteRepository athleteRepository;
     @Mock private CommissionRepository commissionRepository;
     @Mock private CartService cartService;
@@ -59,8 +60,8 @@ class OrderServiceTest {
     }
 
     private void stubCommonSaves() {
-        when(customerRepository.save(any(Customer.class))).thenAnswer(inv -> {
-            Customer c = inv.getArgument(0);
+        when(customerFactory.resolveForCheckout(any(), any(OrderRequestDto.class))).thenAnswer(inv -> {
+            Customer c = new Customer("Jane Doe", "0771234567", "123 Main St");
             c.setId(5L);
             return c;
         });
@@ -187,7 +188,9 @@ class OrderServiceTest {
 
         // Nothing partially created — not even the customer row, and
         // definitely not an order for the one item that WAS in stock.
-        verify(customerRepository, never()).save(any());
+        // Stock is validated before the CustomerFactory is ever called,
+        // so it should see zero interactions at all.
+        verifyNoInteractions(customerFactory);
         verify(orderRepository, never()).save(any());
         verify(productRepository, never()).save(any());
     }
@@ -237,8 +240,7 @@ class OrderServiceTest {
                 "Jane Doe", "0771234567", "123 Main St", List.of(item), null);
 
         when(productRepository.findById(1L)).thenReturn(Optional.of(tee));
-        when(customerRepository.findById(5L)).thenReturn(Optional.of(existing));
-        when(customerRepository.save(any(Customer.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(customerFactory.resolveForCheckout(5L, request)).thenReturn(existing);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
             o.setId(100L);
