@@ -30,10 +30,11 @@ import java.util.List;
  * from a path variable — so one customer can never view or edit another
  * customer's profile, orders, or cart just by changing a URL.
  * <p>
- * Every cart-mutating endpoint below builds a {@link CartCommand} and runs
- * it through {@link CartInvoker} instead of calling {@link CartService}
- * directly — see {@link CartInvoker} and the {@code command} package for
- * why (Command design pattern, with undo support).
+ * Every cart-mutating endpoint below builds a {@link CartCommand} (or, for
+ * clearing the whole cart, a {@code MacroCartCommand}) and runs it through
+ * {@link CartInvoker} instead of calling {@link CartService} directly —
+ * see {@link CartInvoker} and the {@code command} package for why
+ * (Command design pattern, with undo support).
  */
 @RestController
 @RequestMapping("/api/customers/me")
@@ -150,8 +151,21 @@ public class CustomerController {
     }
 
     /**
-     * Undoes the most recent cart action (add, quantity change, or
-     * removal) for the logged-in customer.
+     * Empties the logged-in customer's entire cart in one action. Runs as
+     * a {@code MacroCartCommand} (bundling one removal per line) through
+     * {@link CartInvoker}, so the whole clear — not just its last line —
+     * can be undone in a single call to {@link #undoLastCartAction}.
+     *
+     * @return the customer's cart, now empty
+     */
+    @DeleteMapping("/cart")
+    public ResponseEntity<List<CartItemDto>> clearCart() {
+        return ResponseEntity.ok(cartInvoker.clearCartAndTrack(currentUser.id()));
+    }
+
+    /**
+     * Undoes the most recent cart action (add, quantity change, removal,
+     * or a whole-cart clear) for the logged-in customer.
      *
      * @return the customer's cart, after the undo
      */

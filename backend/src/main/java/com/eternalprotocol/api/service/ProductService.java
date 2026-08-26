@@ -6,6 +6,8 @@ import com.eternalprotocol.api.entity.Product;
 import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
+import com.eternalprotocol.api.factory.product.ProductCreator;
+import com.eternalprotocol.api.factory.product.ProductCreatorFactory;
 import com.eternalprotocol.api.repository.CartItemRepository;
 import com.eternalprotocol.api.repository.ProductRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,17 +25,20 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CartItemRepository cartItemRepository;
     private final ProductImageService productImageService;
+    private final ProductCreatorFactory productCreatorFactory;
 
     /**
-     * @param productRepository   access to product data
-     * @param cartItemRepository  used to clear cart lines when a product is deleted
-     * @param productImageService keeps a product's cover photo in sync with its gallery
+     * @param productRepository     access to product data
+     * @param cartItemRepository    used to clear cart lines when a product is deleted
+     * @param productImageService   keeps a product's cover photo in sync with its gallery
+     * @param productCreatorFactory picks the right category-specific size rule (Factory Method — see that package)
      */
     public ProductService(ProductRepository productRepository, CartItemRepository cartItemRepository,
-                           ProductImageService productImageService) {
+                           ProductImageService productImageService, ProductCreatorFactory productCreatorFactory) {
         this.productRepository = productRepository;
         this.cartItemRepository = cartItemRepository;
         this.productImageService = productImageService;
+        this.productCreatorFactory = productCreatorFactory;
     }
 
     /**
@@ -77,13 +82,20 @@ public class ProductService {
 
     /**
      * Creates a new product variant.
+     * <p>
+     * Built via {@link ProductCreatorFactory} (Factory Method — see that
+     * package): which creator subclass runs depends on
+     * {@code request.category()}, and decides how this variant's
+     * {@code size} is resolved — e.g. accessories default to "One Size"
+     * when none is given, apparel requires one explicitly.
      *
      * @param request new product's details
      * @return the created product
+     * @throws IllegalArgumentException if this category requires a size and none was given
      */
     public ProductDto createProduct(ProductRequestDto request) {
-        Product product = new Product();
-        applyRequest(product, request);
+        Product product = productCreatorFactory.creatorFor(request.category()).createProduct(request);
+        syncCoverImage(product, request);
         return toDto(productRepository.save(product));
     }
 
@@ -94,10 +106,12 @@ public class ProductService {
      * @param request updated product details
      * @return the updated product
      * @throws ResourceNotFoundException if no product exists with this ID
+     * @throws IllegalArgumentException  if this category requires a size and none was given
      */
     public ProductDto updateProduct(Long id, ProductRequestDto request) {
         Product product = findProductOrThrow(id);
-        applyRequest(product, request);
+        productCreatorFactory.creatorFor(request.category()).applyCommonFields(product, request);
+        syncCoverImage(product, request);
         return toDto(productRepository.save(product));
     }
 
@@ -144,27 +158,21 @@ public class ProductService {
     }
 
     /**
-     * Copies fields from a create/update request onto a product entity.
-     * Also syncs {@code imageUrl} from the product's photo gallery if one
+     * Syncs {@code imageUrl} from the product's photo gallery if one
      * already exists, since the cover photo now comes from the gallery
      * (see {@code ProductGalleryEditor} on the frontend) rather than being
      * set manually. Falls back to whatever the request explicitly
      * provided if no gallery cover exists yet.
+     * <p>
+     * Every other field is already set by this point — by
+     * {@link ProductCreator#createProduct} for a new product, or
+     * {@link ProductCreator#applyCommonFields} for an update — so this
+     * only ever touches {@code imageUrl}.
      *
      * @param product the entity to update
      * @param request the incoming request data
      */
-    private void applyRequest(Product product, ProductRequestDto request) {
-        product.setStyleCode(request.styleCode());
-        product.setName(request.name());
-        product.setCategory(request.category());
-        product.setSubCategory(request.subCategory());
-        product.setPrice(request.price());
-        product.setColour(request.colour());
-        product.setSize(request.size());
-        product.setStockQty(request.stockQty());
-        product.setDescription(request.description());
-
+    private void syncCoverImage(Product product, ProductRequestDto request) {
         product.setImageUrl(productImageService.getCoverImageUrl(request.styleCode(), request.colour())
                 .orElse(request.imageUrl()));
     }

@@ -16,8 +16,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * keeps a short per-customer history so the most recent one can be undone.
  * <p>
  * {@link com.eternalprotocol.api.controller.CustomerController} never
- * calls {@code undo()} on a command directly — every cart mutation goes
- * through {@link #executeAndTrack}, and every undo goes through
+ * calls {@code undo()} on a command directly — every single-line cart
+ * mutation goes through {@link #executeAndTrack}, every whole-cart clear
+ * goes through {@link #clearCartAndTrack} (built from a
+ * {@link MacroCartCommand}), and every undo goes through
  * {@link #undoLast}, so this class is the single place that decides which
  * command is "the most recent one" for a given customer.
  * <p>
@@ -64,14 +66,53 @@ public class CartInvoker {
      */
     public CartItemDto executeAndTrack(Long customerId, CartCommand command) {
         CartItemDto result = command.execute();
+        track(customerId, command);
+        return result;
+    }
 
+    /**
+     * Clears a customer's entire cart as one undoable action, using the
+     * {@link MacroCartCommand} pattern instead of deleting every line
+     * directly.
+     * <p>
+     * Builds one {@link RemoveFromCartCommand} per current cart line,
+     * bundles them into a single {@code MacroCartCommand}, and tracks that
+     * macro exactly like any other command — so {@link #undoLast} restores
+     * every line the clear removed, in one call, rather than requiring the
+     * customer to undo once per line.
+     *
+     * @param customerId the customer whose cart should be cleared
+     * @return the customer's cart, now empty
+     */
+    public List<CartItemDto> clearCartAndTrack(Long customerId) {
+        List<CartCommand> removals = cartService.getCart(customerId).stream()
+                .<CartCommand>map(line -> new RemoveFromCartCommand(cartService, customerId, line.id()))
+                .toList();
+
+        MacroCartCommand macro = new MacroCartCommand(removals);
+        macro.execute();
+        track(customerId, macro);
+
+        return cartService.getCart(customerId);
+    }
+
+    /**
+     * Records a command as this customer's most recent undoable action,
+     * evicting the oldest entry once the per-customer cap is exceeded.
+     * Shared by {@link #executeAndTrack} and {@link #clearCartAndTrack} so
+     * a single {@link MacroCartCommand} is tracked exactly like any other
+     * {@link CartCommand} — {@link #undoLast} doesn't need to know or care
+     * which kind it's popping.
+     *
+     * @param customerId the customer the command acts on
+     * @param command    the already-executed command to record
+     */
+    private void track(Long customerId, CartCommand command) {
         Deque<CartCommand> history = historyByCustomer.computeIfAbsent(customerId, id -> new ArrayDeque<>());
         history.push(command);
         while (history.size() > MAX_HISTORY_PER_CUSTOMER) {
             history.removeLast();
         }
-
-        return result;
     }
 
     /**

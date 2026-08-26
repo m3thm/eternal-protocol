@@ -5,6 +5,9 @@ import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.InsufficientStockException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.factory.CustomerFactory;
+import com.eternalprotocol.api.referral.AppliedAthleteReferral;
+import com.eternalprotocol.api.referral.AthleteReferral;
+import com.eternalprotocol.api.referral.NoAthleteReferral;
 import com.eternalprotocol.api.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -118,13 +121,13 @@ public class OrderService {
                     "Not enough stock for: " + String.join("; ", insufficientStockMessages));
         }
 
-        // Athlete code, if any, applies once to the whole order — not per line.
-        Athlete athlete = null;
-        if (request.athleteCode() != null && !request.athleteCode().isBlank()) {
-            athlete = athleteRepository.findByAthleteCodeIgnoreCase(request.athleteCode())
-                    .filter(Athlete::isActive)
-                    .orElse(null); // invalid/inactive code -> silently no discount, don't fail checkout
-        }
+        // Athlete code, if any, applies once to the whole order — not per
+        // line. Resolved as an AthleteReferral (Null Object pattern — see
+        // that interface) rather than a nullable Athlete, so nothing below
+        // needs an "if there was an athlete" check: an invalid/inactive
+        // code simply resolves to NoAthleteReferral, which behaves exactly
+        // like "no discount, no commission" without special-casing it.
+        AthleteReferral referral = resolveReferral(request.athleteCode());
 
         // Resolve the customer via CustomerFactory (Simple Factory): reuse
         // the logged-in account if present, otherwise create a fresh
@@ -137,12 +140,9 @@ public class OrderService {
                         .multiply(BigDecimal.valueOf(item.quantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal discount = athlete == null
-                ? BigDecimal.ZERO
-                : subtotal.multiply(athlete.getCommissionRate())
-                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal discount = referral.calculateDiscount(subtotal);
 
-        Order order = new Order(customer, subtotal, discount, athlete != null ? athlete.getAthleteCode() : null);
+        Order order = new Order(customer, subtotal, discount, referral.athleteCodeForOrder());
 
         for (OrderItemRequestDto itemRequest : request.items()) {
             Product product = productsById.get(itemRequest.productId());
@@ -162,9 +162,10 @@ public class OrderService {
             productRepository.save(product);
         }
 
-        if (athlete != null) {
-            commissionRepository.save(new Commission(athlete, order, discount));
-        }
+        // Unconditional — see AthleteReferral: NoAthleteReferral's
+        // implementation of this is a no-op, so this line doesn't need an
+        // "if there was an athlete" check the way it used to.
+        referral.recordCommission(commissionRepository, order, discount);
 
         // Logged-in customers checking out empties their persisted cart —
         // otherwise items they just bought would still show as "in cart"
@@ -271,6 +272,30 @@ public class OrderService {
             orders = orderRepository.findAllByOrderByOrderDateDesc();
         }
         return orders.stream().map(this::toAdminDto).toList();
+    }
+
+    /**
+     * Resolves whatever athlete referral applies to a checkout, always
+     * returning a real, non-null {@link AthleteReferral} — never a
+     * nullable {@code Athlete} for callers to check themselves.
+     * <p>
+     * A blank/missing code, or one that doesn't match any active athlete,
+     * both resolve to the same {@link NoAthleteReferral#INSTANCE} — from
+     * {@code createOrder}'s point of view "no code entered" and "invalid
+     * code entered" are the same case, and checkout must not fail either
+     * way (see the class-level note on {@code AthleteReferral}).
+     *
+     * @param athleteCode the code submitted at checkout, may be null/blank
+     * @return the resolved referral, real or the Null Object
+     */
+    private AthleteReferral resolveReferral(String athleteCode) {
+        if (athleteCode == null || athleteCode.isBlank()) {
+            return NoAthleteReferral.INSTANCE;
+        }
+        return athleteRepository.findByAthleteCodeIgnoreCase(athleteCode)
+                .filter(Athlete::isActive)
+                .<AthleteReferral>map(AppliedAthleteReferral::new)
+                .orElse(NoAthleteReferral.INSTANCE);
     }
 
     /**
