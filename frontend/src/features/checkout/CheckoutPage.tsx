@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { productsApi } from '@/api/products'
@@ -49,6 +49,15 @@ export function CheckoutPage() {
     enabled: role === 'CUSTOMER' && !directBuy,
   })
 
+  // Pre-fill the delivery fields below from the account's saved details for
+  // a logged-in customer — same ['profile'] cache ProfilePage uses, so this
+  // is instant if they've already visited My Account this session.
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: customersApi.me,
+    enabled: role === 'CUSTOMER',
+  })
+
   const lines: CheckoutLine[] = useMemo(() => {
     if (directBuy && directProduct) {
       return [
@@ -90,6 +99,19 @@ export function CheckoutPage() {
   const [customerName, setCustomerName] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+
+  // Runs once, the first time the profile arrives — not on every refetch —
+  // so a background refetch (e.g. tab refocus) can't stomp on something the
+  // customer has already typed or edited on this form.
+  const hasPrefilled = useRef(false)
+  useEffect(() => {
+    if (!profile || hasPrefilled.current) return
+    hasPrefilled.current = true
+    setCustomerName((prev) => prev || profile.name)
+    setPhone((prev) => prev || profile.phone)
+    setAddress((prev) => prev || profile.address)
+  }, [profile])
+
   const [athleteCode, setAthleteCode] = useState('')
   const [codePreview, setCodePreview] = useState<{ valid: boolean; discountPercentage: number } | null>(null)
   const [checking, setChecking] = useState(false)
