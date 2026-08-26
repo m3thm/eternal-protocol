@@ -6,6 +6,8 @@ import com.eternalprotocol.api.entity.Product;
 import com.eternalprotocol.api.entity.ProductCategory;
 import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
+import com.eternalprotocol.api.factory.product.ApparelProductCreator;
+import com.eternalprotocol.api.factory.product.ProductCreatorFactory;
 import com.eternalprotocol.api.repository.CartItemRepository;
 import com.eternalprotocol.api.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +36,8 @@ class ProductServiceTest {
     private CartItemRepository cartItemRepository;
     @Mock
     private ProductImageService productImageService;
+    @Mock
+    private ProductCreatorFactory productCreatorFactory;
 
     @InjectMocks
     private ProductService productService;
@@ -173,6 +177,7 @@ class ProductServiceTest {
                 "PROTOCOL-002", "New Tee", ProductCategory.MENS, "T-Shirts",
                 new BigDecimal("3000.00"), "White", "L", 20, "img.png", "desc");
         when(productImageService.getCoverImageUrl("PROTOCOL-002", "White")).thenReturn(Optional.empty());
+        when(productCreatorFactory.creatorFor(ProductCategory.MENS)).thenReturn(new ApparelProductCreator());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
             Product p = inv.getArgument(0);
             p.setId(2L);
@@ -199,6 +204,7 @@ class ProductServiceTest {
                 new BigDecimal("3000.00"), "Black", "M", 10, null, null);
         when(productImageService.getCoverImageUrl("PROTOCOL-003", "Black"))
                 .thenReturn(Optional.of("https://cloudinary.example.com/gallery-cover.png"));
+        when(productCreatorFactory.creatorFor(ProductCategory.MENS)).thenReturn(new ApparelProductCreator());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProductDto result = productService.createProduct(request);
@@ -213,6 +219,7 @@ class ProductServiceTest {
                 new BigDecimal("5000.00"), "Grey", "XL", 10, "img2.png", "desc2");
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
         when(productImageService.getCoverImageUrl("PROTOCOL-001-V2", "Grey")).thenReturn(Optional.empty());
+        when(productCreatorFactory.creatorFor(ProductCategory.WOMENS)).thenReturn(new ApparelProductCreator());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProductDto result = productService.updateProduct(1L, request);

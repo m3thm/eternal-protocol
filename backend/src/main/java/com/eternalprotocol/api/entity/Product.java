@@ -1,10 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 
@@ -22,10 +18,6 @@ import java.math.BigDecimal;
  */
 @Entity
 @Table(name = "products")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class Product {
 
     /** Auto-generated primary key. */
@@ -47,11 +39,9 @@ public class Product {
     private ProductCategory category;
 
     /**
-     * Free-text subcategory set by the admin (e.g. "T-Shirts", "Hoodies",
-     * "Caps", "Bags"). Unlike {@code category}, this isn't a fixed set of
-     * values — new subcategories can be added over time. The storefront's
-     * dropdown filters are populated from whatever distinct values
-     * currently exist for a category.
+     * Free-text subcategory set by the admin (e.g. "T-Shirts", "Hoodies").
+     * Unlike {@code category}, this isn't a fixed set — the storefront's
+     * dropdown filters are populated from whatever values currently exist.
      */
     @Column(name = "sub_category", nullable = false)
     private String subCategory;
@@ -79,4 +69,125 @@ public class Product {
     /** Longer free-text description shown on the product detail page. */
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    /** Default constructor, required by JPA. */
+    public Product() {
+    }
+
+    /**
+     * Creates a fully-specified product variant.
+     *
+     * @param styleCode   shared code for every colour/size of this style
+     * @param name        display name
+     * @param category    top-level storefront category
+     * @param subCategory free-text subcategory
+     * @param price       price of this variant
+     * @param colour      colour of this variant
+     * @param size        size of this variant
+     * @param stockQty    units currently in stock
+     * @param imageUrl    main listing image URL
+     * @param description longer product description
+     */
+    public Product(String styleCode, String name, ProductCategory category, String subCategory,
+                    BigDecimal price, String colour, String size, Integer stockQty,
+                    String imageUrl, String description) {
+        this.styleCode = styleCode;
+        this.name = name;
+        this.category = category;
+        this.subCategory = subCategory;
+        this.price = price;
+        this.colour = colour;
+        this.size = size;
+        this.stockQty = stockQty;
+        this.imageUrl = imageUrl;
+        this.description = description;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getStyleCode() {
+        return styleCode;
+    }
+
+    public void setStyleCode(String styleCode) {
+        this.styleCode = styleCode;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public ProductCategory getCategory() {
+        return category;
+    }
+
+    public void setCategory(ProductCategory category) {
+        this.category = category;
+    }
+
+    public String getSubCategory() {
+        return subCategory;
+    }
+
+    public void setSubCategory(String subCategory) {
+        this.subCategory = subCategory;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    public void setColour(String colour) {
+        this.colour = colour;
+    }
+
+    public String getSize() {
+        return size;
+    }
+
+    public void setSize(String size) {
+        this.size = size;
+    }
+
+    public Integer getStockQty() {
+        return stockQty;
+    }
+
+    public void setStockQty(Integer stockQty) {
+        this.stockQty = stockQty;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
 }

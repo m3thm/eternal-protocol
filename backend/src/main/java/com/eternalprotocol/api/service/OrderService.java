@@ -4,6 +4,10 @@ import com.eternalprotocol.api.dto.*;
 import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.InsufficientStockException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
+import com.eternalprotocol.api.factory.CustomerFactory;
+import com.eternalprotocol.api.referral.AppliedAthleteReferral;
+import com.eternalprotocol.api.referral.AthleteReferral;
+import com.eternalprotocol.api.referral.NoAthleteReferral;
 import com.eternalprotocol.api.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,26 +24,21 @@ import java.util.stream.Collectors;
  * Business logic for placing orders, confirming PayHere payments, and
  * reading back order history.
  * <p>
- * Most read methods here are {@code @Transactional(readOnly = true)}. This
- * matters because every DTO built here reads {@code order.getItems()} and
- * each item's related product/customer — all "lazy" associations that are
- * only fetched from the database when actually read. With
- * {@code open-in-view: false} in this app's configuration, those lazy
- * reads only work while the original database session is still open.
- * Building the DTO inside the same {@code @Transactional} method (instead
- * of returning a raw entity for something else to convert later) is what
- * keeps that session open long enough. Skipping the annotation won't fail
- * in tests, since the test framework happens to wrap a whole test method
- * in one shared transaction — but it will throw a
- * {@code LazyInitializationException} against a real frontend request,
- * where no such wrapping transaction exists.
+ * Most read methods here are {@code @Transactional(readOnly = true)}: DTOs
+ * built here read lazy associations like {@code order.getItems()}, and
+ * with {@code open-in-view: false} those reads only work while the
+ * original database session is still open. Building the DTO inside the
+ * same transactional method keeps that session open long enough — skip
+ * the annotation and it works in tests (which wrap a test method in one
+ * shared transaction) but throws {@code LazyInitializationException}
+ * against a real request.
  */
 @Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
-    private final CustomerRepository customerRepository;
+    private final CustomerFactory customerFactory;
     private final AthleteRepository athleteRepository;
     private final CommissionRepository commissionRepository;
     private final CartService cartService;
@@ -48,7 +47,7 @@ public class OrderService {
     /**
      * @param orderRepository      access to order data
      * @param productRepository    access to product data, for stock checks and pricing
-     * @param customerRepository   access to customer data
+     * @param customerFactory      resolves which customer a new order is attached to (Simple Factory — see that class)
      * @param athleteRepository    access to athlete data, for discount code lookup
      * @param commissionRepository access to commission data
      * @param cartService          clears a customer's saved cart after checkout
@@ -56,14 +55,14 @@ public class OrderService {
      */
     public OrderService(OrderRepository orderRepository,
                          ProductRepository productRepository,
-                         CustomerRepository customerRepository,
+                         CustomerFactory customerFactory,
                          AthleteRepository athleteRepository,
                          CommissionRepository commissionRepository,
                          CartService cartService,
                          PaymentService paymentService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
-        this.customerRepository = customerRepository;
+        this.customerFactory = customerFactory;
         this.athleteRepository = athleteRepository;
         this.commissionRepository = commissionRepository;
         this.cartService = cartService;
@@ -93,10 +92,9 @@ public class OrderService {
      */
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto request, Long loggedInCustomerId) {
-        // Load every requested product up front and validate stock for
-        // ALL items before creating or decrementing anything — an order
-        // with 3 items where only the 3rd is out of stock should fail
-        // cleanly with no partial order, not create 2 items then blow up.
+        // Validate stock for ALL items before creating or decrementing
+        // anything — an order with 3 items where only the 3rd is out of
+        // stock should fail cleanly, not create 2 items then blow up.
         Map<Long, Product> productsById = new HashMap<>();
         List<String> insufficientStockMessages = new ArrayList<>();
 
@@ -117,41 +115,23 @@ public class OrderService {
                     "Not enough stock for: " + String.join("; ", insufficientStockMessages));
         }
 
-        // Athlete code, if any, applies once to the whole order — not per line.
-        Athlete athlete = null;
-        if (request.athleteCode() != null && !request.athleteCode().isBlank()) {
-            athlete = athleteRepository.findByAthleteCodeIgnoreCase(request.athleteCode())
-                    .filter(Athlete::isActive)
-                    .orElse(null); // invalid/inactive code -> silently no discount, don't fail checkout
-        }
+        // Athlete code, if any, applies once to the whole order — resolved
+        // as an AthleteReferral (Null Object pattern) so nothing below
+        // needs an "if there was an athlete" check.
+        AthleteReferral referral = resolveReferral(request.athleteCode());
 
-        // Resolve the customer: reuse the logged-in account if present,
-        // otherwise create a fresh guest row (mirrors pre-login behaviour).
-        Customer customer;
-        if (loggedInCustomerId != null) {
-            customer = customerRepository.findById(loggedInCustomerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
-            // Keep delivery info current with whatever was submitted at checkout.
-            customer.setName(request.customerName());
-            customer.setPhone(request.phone());
-            customer.setAddress(request.address());
-            customer = customerRepository.save(customer);
-        } else {
-            customer = customerRepository.save(
-                    new Customer(request.customerName(), request.phone(), request.address()));
-        }
+        // Reuse the logged-in account if present, otherwise create a
+        // fresh guest row — see CustomerFactory for why this lives there.
+        Customer customer = customerFactory.resolveForCheckout(loggedInCustomerId, request);
 
         BigDecimal subtotal = request.items().stream()
                 .map(item -> productsById.get(item.productId()).getPrice()
                         .multiply(BigDecimal.valueOf(item.quantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal discount = athlete == null
-                ? BigDecimal.ZERO
-                : subtotal.multiply(athlete.getCommissionRate())
-                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal discount = referral.calculateDiscount(subtotal);
 
-        Order order = new Order(customer, subtotal, discount, athlete != null ? athlete.getAthleteCode() : null);
+        Order order = new Order(customer, subtotal, discount, referral.athleteCodeForOrder());
 
         for (OrderItemRequestDto itemRequest : request.items()) {
             Product product = productsById.get(itemRequest.productId());
@@ -162,22 +142,19 @@ public class OrderService {
         order = orderRepository.save(order);
 
         // Reserve stock at order-creation time (checkout submission), not
-        // on payment confirmation — see class-level note on why, and the
-        // known read-then-write race-condition tradeoff, unchanged from
-        // the single-item version of this method.
+        // on payment confirmation — a known read-then-write race exists,
+        // unchanged from the single-item version of this method.
         for (OrderItemRequestDto itemRequest : request.items()) {
             Product product = productsById.get(itemRequest.productId());
             product.setStockQty(product.getStockQty() - itemRequest.quantity());
             productRepository.save(product);
         }
 
-        if (athlete != null) {
-            commissionRepository.save(new Commission(athlete, order, discount));
-        }
+        // Unconditional — NoAthleteReferral's implementation is a no-op.
+        referral.recordCommission(commissionRepository, order, discount);
 
-        // Logged-in customers checking out empties their persisted cart —
-        // otherwise items they just bought would still show as "in cart"
-        // the next time they load the page.
+        // Clear the persisted cart so items just bought don't still show
+        // as "in cart" on the customer's next visit.
         if (loggedInCustomerId != null) {
             cartService.clearCart(loggedInCustomerId);
         }
@@ -280,6 +257,30 @@ public class OrderService {
             orders = orderRepository.findAllByOrderByOrderDateDesc();
         }
         return orders.stream().map(this::toAdminDto).toList();
+    }
+
+    /**
+     * Resolves whatever athlete referral applies to a checkout, always
+     * returning a real, non-null {@link AthleteReferral} — never a
+     * nullable {@code Athlete} for callers to check themselves.
+     * <p>
+     * A blank/missing code, or one that doesn't match any active athlete,
+     * both resolve to the same {@link NoAthleteReferral#INSTANCE} — from
+     * {@code createOrder}'s point of view "no code entered" and "invalid
+     * code entered" are the same case, and checkout must not fail either
+     * way (see the class-level note on {@code AthleteReferral}).
+     *
+     * @param athleteCode the code submitted at checkout, may be null/blank
+     * @return the resolved referral, real or the Null Object
+     */
+    private AthleteReferral resolveReferral(String athleteCode) {
+        if (athleteCode == null || athleteCode.isBlank()) {
+            return NoAthleteReferral.INSTANCE;
+        }
+        return athleteRepository.findByAthleteCodeIgnoreCase(athleteCode)
+                .filter(Athlete::isActive)
+                .<AthleteReferral>map(AppliedAthleteReferral::new)
+                .orElse(NoAthleteReferral.INSTANCE);
     }
 
     /**

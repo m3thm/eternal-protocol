@@ -20,7 +20,9 @@ import java.math.BigDecimal;
  * @param subCategory admin-set subcategory
  * @param price       price, must be greater than 0
  * @param colour      colour of this variant
- * @param size        size of this variant
+ * @param size        size of this variant. Required for MENS/WOMENS; may be
+ *                     left blank for ACCESSORIES, which defaults to "One Size" —
+ *                     see {@link com.eternalprotocol.api.factory.product.ProductCreator}
  * @param stockQty    units in stock, cannot be negative
  * @param imageUrl    main thumbnail image URL, obtained from the upload endpoint
  * @param description longer description text
@@ -32,7 +34,7 @@ public record ProductRequestDto(
         @NotBlank(message = "Subcategory is required") String subCategory,
         @NotNull(message = "Price is required") @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0") BigDecimal price,
         @NotBlank(message = "Colour is required") String colour,
-        @NotBlank(message = "Size is required") String size,
+        String size,
         @NotNull(message = "Stock quantity is required") @Min(value = 0, message = "Stock cannot be negative") Integer stockQty,
         String imageUrl,
         String description

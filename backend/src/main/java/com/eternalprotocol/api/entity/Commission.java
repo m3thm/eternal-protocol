@@ -1,10 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,17 +9,12 @@ import java.time.LocalDateTime;
  * Database entity tracking money owed to an athlete for one order placed
  * with their code.
  * <p>
- * Maps onto the {@code commissions} table. Exactly one Commission row is
- * created per order that used an athlete code, and it moves through the
- * stages described in {@link CommissionStatus} as payment is confirmed and
- * later paid out to the athlete.
+ * Exactly one Commission row is created per order that used an athlete
+ * code, and it moves through the stages in {@link CommissionStatus} as
+ * payment is confirmed and later paid out.
  */
 @Entity
 @Table(name = "commissions")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public class Commission {
 
     /** Auto-generated primary key. */
@@ -36,11 +27,7 @@ public class Commission {
     @JoinColumn(name = "athlete_id", nullable = false)
     private Athlete athlete;
 
-    /**
-     * The order this commission is for. {@code @OneToOne} plus
-     * {@code unique = true} means each order can have at most one
-     * commission — never two.
-     */
+    /** The order this commission is for. At most one commission per order. */
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false, unique = true)
     private Order order;
@@ -58,6 +45,10 @@ public class Commission {
     @Column(name = "paid_date")
     private LocalDateTime paidDate;
 
+    /** Default constructor, required by JPA. */
+    public Commission() {
+    }
+
     /**
      * Creates a new commission in the {@code AWAITING_PAYMENT} status.
      *
@@ -70,5 +61,53 @@ public class Commission {
         this.order = order;
         this.commissionAmount = commissionAmount;
         this.commissionStatus = CommissionStatus.AWAITING_PAYMENT;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Athlete getAthlete() {
+        return athlete;
+    }
+
+    public void setAthlete(Athlete athlete) {
+        this.athlete = athlete;
+    }
+
+    public Order getOrder() {
+        return order;
+    }
+
+    public void setOrder(Order order) {
+        this.order = order;
+    }
+
+    public BigDecimal getCommissionAmount() {
+        return commissionAmount;
+    }
+
+    public void setCommissionAmount(BigDecimal commissionAmount) {
+        this.commissionAmount = commissionAmount;
+    }
+
+    public CommissionStatus getCommissionStatus() {
+        return commissionStatus;
+    }
+
+    public void setCommissionStatus(CommissionStatus commissionStatus) {
+        this.commissionStatus = commissionStatus;
+    }
+
+    public LocalDateTime getPaidDate() {
+        return paidDate;
+    }
+
+    public void setPaidDate(LocalDateTime paidDate) {
+        this.paidDate = paidDate;
     }
 }

@@ -1,9 +1,6 @@
 package com.eternalprotocol.api.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -14,17 +11,18 @@ import java.util.List;
  * Database entity for a single checkout: one customer, one payment, and one
  * or more {@link OrderItem} lines.
  * <p>
- * Maps onto the {@code orders} table. This class deliberately does not
- * store product/size/colour/quantity directly — every product actually
- * bought is a separate row in {@code items}. Discount and total amounts
- * live here (not per item) because an athlete discount code applies to the
- * whole order, not to individual lines.
+ * Deliberately does not store product/size/colour/quantity directly —
+ * every product bought is a separate row in {@code items}. Discount and
+ * total live here (not per item) since an athlete discount applies to the
+ * whole order, not individual lines.
+ * <p>
+ * An Order owns its OrderItems: {@code cascade = CascadeType.ALL} and
+ * {@code orphanRemoval = true} below mean an item is always created
+ * through {@link #addItem} and is deleted automatically once removed from
+ * this list or the Order itself is deleted.
  */
 @Entity
 @Table(name = "orders")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Order {
 
     /** Auto-generated primary key. */
@@ -37,12 +35,7 @@ public class Order {
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    /**
-     * All product lines in this order.
-     * {@code cascade = CascadeType.ALL} means saving/deleting an Order
-     * automatically saves/deletes its items too. {@code orphanRemoval = true}
-     * means removing an item from this list deletes it from the database.
-     */
+    /** All product lines in this order. */
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItem> items = new ArrayList<>();
 
@@ -75,6 +68,10 @@ public class Order {
     @Column(name = "payhere_order_id", unique = true)
     private String payhereOrderId;
 
+    /** Default constructor, required by JPA. */
+    public Order() {
+    }
+
     /**
      * Creates a new order with total automatically calculated as
      * {@code subtotalAmount - discountAmount}.
@@ -104,5 +101,85 @@ public class Order {
     public void addItem(OrderItem item) {
         items.add(item);
         item.setOrder(this);
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
+    }
+
+    public List<OrderItem> getItems() {
+        return items;
+    }
+
+    public void setItems(List<OrderItem> items) {
+        this.items = items;
+    }
+
+    public BigDecimal getSubtotalAmount() {
+        return subtotalAmount;
+    }
+
+    public void setSubtotalAmount(BigDecimal subtotalAmount) {
+        this.subtotalAmount = subtotalAmount;
+    }
+
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public void setDiscountAmount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+
+    public BigDecimal getTotalAmount() {
+        return totalAmount;
+    }
+
+    public void setTotalAmount(BigDecimal totalAmount) {
+        this.totalAmount = totalAmount;
+    }
+
+    public OrderStatus getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(OrderStatus paymentStatus) {
+        this.paymentStatus = paymentStatus;
+    }
+
+    public String getAthleteCode() {
+        return athleteCode;
+    }
+
+    public void setAthleteCode(String athleteCode) {
+        this.athleteCode = athleteCode;
+    }
+
+    public LocalDateTime getOrderDate() {
+        return orderDate;
+    }
+
+    public void setOrderDate(LocalDateTime orderDate) {
+        this.orderDate = orderDate;
+    }
+
+    public String getPayhereOrderId() {
+        return payhereOrderId;
+    }
+
+    public void setPayhereOrderId(String payhereOrderId) {
+        this.payhereOrderId = payhereOrderId;
     }
 }

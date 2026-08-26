@@ -1,5 +1,6 @@
 package com.eternalprotocol.api.service;
 
+import com.eternalprotocol.api.cache.AthleteCodeCache;
 import com.eternalprotocol.api.dto.*;
 import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.EmailAlreadyInUseException;
@@ -42,6 +43,18 @@ class AthleteServiceTest {
 
     @BeforeEach
     void setUp() {
+        // AthleteService.validateCode reads through AthleteCodeCache, which
+        // is a genuine JVM-wide singleton (see that class) — its state
+        // persists across test methods and even across test classes run in
+        // the same JVM. Without clearing it here, a code cached as "valid"
+        // by one test (e.g. "RISE10") could leak into a later test that
+        // expects the same code to now be invalid, causing that test to see
+        // a stale cached result instead of exercising the repository mock
+        // it just set up. This is a genuine, well-known trade-off of the
+        // Singleton pattern — global mutable state is convenient in
+        // production and awkward in tests — worth knowing for the viva.
+        AthleteCodeCache.getInstance().clear();
+
         athlete = new Athlete();
         athlete.setId(7L);
         athlete.setName("Usain Bolt");

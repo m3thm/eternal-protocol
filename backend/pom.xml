@@ -20,16 +20,14 @@
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.12.6</jjwt.version>
-        <lombok.version>1.18.42</lombok.version>
         <!--
             Spring Boot 3.3.4's dependency management bundles a Mockito
             version whose ByteBuddy predates Java 25 support entirely —
             every @Mock/@InjectMocks call on a concrete class throws
             "Java 25 (69) is not supported by the current version of Byte
-            Buddy" on startup. Pinning both explicitly here is the same
-            fix pattern as the lombok.version override above: don't trust
-            the parent BOM's version on a JDK this new, pin something
-            confirmed to support it.
+            Buddy" on startup. Pinning both explicitly here is the fix:
+            don't trust the parent BOM's version on a JDK this new, pin
+            something confirmed to support it.
         -->
         <mockito.version>5.19.0</mockito.version>
         <byte-buddy.version>1.17.8</byte-buddy.version>
@@ -89,14 +87,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Lombok (cuts boilerplate on entities/DTOs) -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <optional>true</optional>
-        </dependency>
-
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -132,42 +122,8 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <!--
-                        Explicitly registering Lombok as an annotation
-                        processor here (rather than relying on Maven to
-                        auto-detect it on the classpath) is what actually
-                        makes @Getter/@Setter/@NoArgsConstructor etc.
-                        generate real methods during compilation. Without
-                        this, some Maven/JDK combinations (seen on Windows)
-                        silently skip annotation processing entirely, and
-                        every generated getter/setter "doesn't exist" —
-                        producing exactly the wall of "cannot find symbol"
-                        errors you'd get if you deleted every getter/setter
-                        from every entity by hand.
-                    -->
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
