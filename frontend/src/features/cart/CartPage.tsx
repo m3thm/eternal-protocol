@@ -64,13 +64,40 @@ function ServerCart() {
     onError: (err) => pushToast(getErrorMessage(err), 'error'),
   })
 
+  const undoMutation = useMutation({
+    mutationFn: customersApi.cart.undo,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
+    onError: (err) => pushToast(getErrorMessage(err), 'error'),
+  })
+
+  const clearMutation = useMutation({
+    mutationFn: customersApi.cart.clear,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] })
+      pushToast('Cart cleared', 'info', { label: 'Undo', onClick: () => undoMutation.mutate() })
+    },
+    onError: (err) => pushToast(getErrorMessage(err), 'error'),
+  })
+
   if (isLoading) return <div className="mx-auto max-w-4xl px-4 py-20 text-sm text-ep-muted">Loading cart…</div>
   if (!items || items.length === 0) return <EmptyCart />
 
   const subtotal = items.reduce((sum: number, i: CartItemDto) => sum + i.price * i.quantity, 0)
 
   return (
-    <CartShell subtotal={subtotal} onCheckout={() => navigate('/checkout')}>
+    <CartShell
+      subtotal={subtotal}
+      onCheckout={() => navigate('/checkout')}
+      headerAction={
+        <button
+          onClick={() => clearMutation.mutate()}
+          disabled={clearMutation.isPending}
+          className="text-xs uppercase tracking-widest text-ep-muted underline hover:text-ep-bone disabled:opacity-60"
+        >
+          {clearMutation.isPending ? 'Clearing…' : 'Clear cart'}
+        </button>
+      }
+    >
       {items.map((item: CartItemDto) => (
         <CartRow
           key={item.id}
@@ -90,10 +117,23 @@ function ServerCart() {
   )
 }
 
-function CartShell({ children, subtotal, onCheckout }: { children: ReactNode; subtotal: number; onCheckout: () => void }) {
+function CartShell({
+  children,
+  subtotal,
+  onCheckout,
+  headerAction,
+}: {
+  children: ReactNode
+  subtotal: number
+  onCheckout: () => void
+  headerAction?: ReactNode
+}) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-      <h1 className="font-display text-4xl">Your cart</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="font-display text-4xl">Your cart</h1>
+        {headerAction}
+      </div>
       <div className="mt-8 divide-y divide-ep-border border-y border-ep-border">{children}</div>
       <div className="mt-8 flex items-center justify-between border-t border-ep-border pt-6">
         <div>

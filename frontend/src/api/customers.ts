@@ -27,5 +27,11 @@ export const customersApi = {
       apiClient.put<CartItemDto>(`/api/customers/me/cart/${itemId}`, { quantity }).then((r) => r.data),
 
     remove: (itemId: number) => apiClient.delete(`/api/customers/me/cart/${itemId}`),
+
+    /** Clears every line in one action — undoable via undo() below. */
+    clear: () => apiClient.delete<CartItemDto[]>('/api/customers/me/cart').then((r) => r.data),
+
+    /** Reverts the most recent cart action (add, quantity change, remove, or clear). */
+    undo: () => apiClient.post<CartItemDto[]>('/api/customers/me/cart/undo').then((r) => r.data),
   },
 }
