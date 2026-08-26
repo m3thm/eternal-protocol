@@ -11,18 +11,15 @@ import java.util.List;
  * Database entity for a single checkout: one customer, one payment, and one
  * or more {@link OrderItem} lines.
  * <p>
- * Maps onto the {@code orders} table. This class deliberately does not
- * store product/size/colour/quantity directly — every product actually
- * bought is a separate row in {@code items}. Discount and total amounts
- * live here (not per item) because an athlete discount code applies to the
- * whole order, not to individual lines.
+ * Deliberately does not store product/size/colour/quantity directly —
+ * every product bought is a separate row in {@code items}. Discount and
+ * total live here (not per item) since an athlete discount applies to the
+ * whole order, not individual lines.
  * <p>
- * <b>Composition:</b> an Order "owns" its OrderItems — a strong whole-part
- * relationship. {@code cascade = CascadeType.ALL} and
- * {@code orphanRemoval = true} below are what enforce that in code: an
- * OrderItem is always created through {@link #addItem}, is never shared
- * with another Order, and is deleted automatically the moment it is
- * removed from this list or this Order itself is deleted.
+ * An Order owns its OrderItems: {@code cascade = CascadeType.ALL} and
+ * {@code orphanRemoval = true} below mean an item is always created
+ * through {@link #addItem} and is deleted automatically once removed from
+ * this list or the Order itself is deleted.
  */
 @Entity
 @Table(name = "orders")
@@ -33,21 +30,12 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * The customer who placed this order.
-     * <b>Association:</b> an Order refers to a Customer that exists
-     * independently before and after this Order — neither owns the other.
-     */
+    /** The customer who placed this order. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    /**
-     * All product lines in this order.
-     * {@code cascade = CascadeType.ALL} means saving/deleting an Order
-     * automatically saves/deletes its items too. {@code orphanRemoval = true}
-     * means removing an item from this list deletes it from the database.
-     */
+    /** All product lines in this order. */
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItem> items = new ArrayList<>();
 

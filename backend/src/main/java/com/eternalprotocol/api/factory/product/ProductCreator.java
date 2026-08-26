@@ -5,30 +5,15 @@ import com.eternalprotocol.api.entity.Product;
 
 /**
  * Factory Method for building a {@link Product} variant, where a
- * category-specific subclass decides one detail of the construction: how
- * the variant's {@code size} is resolved.
+ * category-specific subclass decides one detail of construction: how the
+ * variant's {@code size} is resolved.
  * <p>
- * This is a deliberately adapted realisation of the pattern for a domain
- * where the "product" being created (in the GoF sense — a {@code Product}
- * database row) is a single JPA entity class with no subclasses of its
- * own, unlike the classic Pizza Store example (or this codebase's own
- * {@link com.eternalprotocol.api.factory.CustomerFactory}'s reference to
- * it) where the factory method picks between genuinely different concrete
- * classes such as {@code NYStyleCheesePizza} versus
- * {@code ChicagoStyleCheesePizza}. What varies here isn't the concrete
- * class returned — it's always a {@code Product} — but which
- * category-specific rule a subclass applies while building it. The
- * pattern's actual defining shape survives that adaptation intact: this
- * class defines {@link #createProduct} as a fixed template that a caller
- * invokes without knowing which subclass it's talking to, and defers one
- * specific decision — {@link #resolveSize} — to whichever subclass is
- * plugged in, exactly as "lets subclasses decide" describes.
- * <p>
- * Two concrete rules exist: {@link ApparelProductCreator} for MENS/WOMENS,
- * which requires an explicit size, and {@link AccessoryProductCreator} for
- * ACCESSORIES, which defaults to "One Size" when none is given —
- * see {@link com.eternalprotocol.api.factory.product.ProductCreatorFactory}
- * for how a category is mapped to the right one.
+ * {@link #createProduct} is a fixed template a caller invokes without
+ * knowing which subclass it's talking to; only {@link #resolveSize} is
+ * deferred to the plugged-in subclass. Two rules exist:
+ * {@link ApparelProductCreator} (MENS/WOMENS, requires an explicit size)
+ * and {@link AccessoryProductCreator} (ACCESSORIES, defaults to "One
+ * Size") — see {@link ProductCreatorFactory} for how a category picks one.
  */
 public abstract class ProductCreator {
 

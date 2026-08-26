@@ -7,15 +7,9 @@ import java.math.BigDecimal;
 
 /**
  * The Null Object case: no athlete code was used, or the one submitted
- * didn't match an active athlete.
- * <p>
- * Every method here answers with "no effect" — zero discount, no code, and
- * {@link #recordCommission} does nothing at all — instead of the caller
- * needing an {@code if (athlete != null)} around each of these decisions.
- * See {@link AthleteReferral} for the full rationale.
- * <p>
- * Stateless, so a single shared {@link #INSTANCE} is used everywhere
- * rather than constructing a new one per checkout.
+ * didn't match an active athlete. Every method answers with "no effect" —
+ * see {@link AthleteReferral} for the full rationale. Stateless, so a
+ * single shared {@link #INSTANCE} is used everywhere.
  */
 public final class NoAthleteReferral implements AthleteReferral {
 

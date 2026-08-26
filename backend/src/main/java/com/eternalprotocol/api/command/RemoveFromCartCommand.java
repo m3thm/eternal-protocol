@@ -46,10 +46,8 @@ public class RemoveFromCartCommand implements CartCommand {
         if (removedSnapshot == null) {
             return; // execute() was never called
         }
-        // Recreates the line via the normal add path. Note this assigns a
-        // fresh cart-line ID rather than restoring the original one — the
-        // original row is gone for good the moment it's deleted, which is
-        // an acceptable trade-off for a cart (unlike, say, an Order).
+        // Recreates the line via the normal add path, so it gets a fresh
+        // ID rather than the deleted row's original one — fine for a cart.
         cartService.addOrUpdateItem(customerId, new CartItemRequestDto(
                 removedSnapshot.productId(), removedSnapshot.size(),
                 removedSnapshot.colour(), removedSnapshot.quantity()));

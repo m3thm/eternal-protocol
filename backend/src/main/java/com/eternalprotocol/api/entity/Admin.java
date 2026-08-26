@@ -3,13 +3,9 @@ package com.eternalprotocol.api.entity;
 import jakarta.persistence.*;
 
 /**
- * Database entity for an admin (staff) account.
- * <p>
- * An "entity" is a plain Java class that Spring Data JPA maps onto a
- * database table. Each field below becomes a column in the {@code admins}
- * table, and each instance of this class represents one row in that table.
- * Admins are the only users allowed to manage products, orders, and
- * athletes through the admin dashboard.
+ * Database entity for an admin (staff) account. Admins are the only users
+ * allowed to manage products, orders, and athletes through the admin
+ * dashboard.
  */
 @Entity
 @Table(name = "admins")

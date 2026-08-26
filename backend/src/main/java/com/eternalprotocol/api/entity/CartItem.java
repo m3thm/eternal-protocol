@@ -5,16 +5,10 @@ import jakarta.persistence.*;
 /**
  * Database entity for one line of a logged-in customer's saved cart.
  * <p>
- * Maps onto the {@code cart_items} table. This only exists for customers
- * with an account, so their cart is remembered between visits and devices.
- * Guests (not logged in) keep their cart entirely in the browser on the
- * frontend — nothing is written here until a logged-in customer adds an
+ * Only exists for customers with an account, so their cart is remembered
+ * between visits and devices. Guests keep their cart entirely in the
+ * browser — nothing is written here until a logged-in customer adds an
  * item.
- * <p>
- * <b>Aggregation:</b> a Customer "has" CartItems, but a CartItem is only
- * ever read one at a time by ID here (there's no {@code List<CartItem>}
- * field on {@link Customer}), so the relationship is expressed from the
- * "many" side only, via the {@code customer} field below.
  */
 @Entity
 @Table(name = "cart_items")
@@ -25,13 +19,7 @@ public class CartItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * The customer this cart line belongs to.
-     * {@code @ManyToOne} means many CartItem rows can point to the same
-     * Customer. {@code FetchType.LAZY} means the related Customer row is
-     * only loaded from the database when it's actually accessed in code,
-     * not automatically every time a CartItem is loaded.
-     */
+    /** The customer this cart line belongs to. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
@@ -41,7 +29,7 @@ public class CartItem {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
-    /** Size chosen, e.g. "M". Stored separately since one Product row is one size/colour combo already, kept here for clarity of intent. */
+    /** Size chosen, e.g. "M". */
     @Column(nullable = false)
     private String size;
 

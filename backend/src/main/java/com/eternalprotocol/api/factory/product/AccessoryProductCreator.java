@@ -4,13 +4,9 @@ import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.ProductCategory;
 
 /**
- * Size rule for the {@link ProductCategory#ACCESSORIES} category: most
- * accessories (caps, bags, and similar) don't come in graded sizes the way
- * clothing does, so an admin can leave the size field blank and this
- * creator fills in a standard {@value #DEFAULT_SIZE} instead of forcing a
- * meaningless value to be typed in every time. An admin who does have a
- * genuinely sized accessory can still type an explicit size, which is
- * respected as-is.
+ * Size rule for {@link ProductCategory#ACCESSORIES}: most accessories
+ * don't come in graded sizes, so a blank size defaults to
+ * {@value #DEFAULT_SIZE}. An explicit size, if given, is still respected.
  */
 public class AccessoryProductCreator extends ProductCreator {
 

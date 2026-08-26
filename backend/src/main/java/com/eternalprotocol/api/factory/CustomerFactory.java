@@ -10,26 +10,12 @@ import org.springframework.stereotype.Component;
  * Simple Factory that resolves the {@link Customer} a new order should be
  * attached to.
  * <p>
- * Checkout supports two different customers, decided purely from one
- * piece of input — whether the shopper is logged in:
- * <ul>
- *   <li>Logged in: reuse their existing account, refreshed with whatever
- *       delivery details were typed at checkout.</li>
- *   <li>Guest: create a brand-new, minimal {@code Customer} row just for
- *       this one order.</li>
- * </ul>
- * This is the same shape as the Simple Factory idiom from the Pizza Store
- * example — one method decides which construction path to take based on
- * its input, and hands back a finished object without the caller ever
- * needing to know which path was taken. There, the deciding input was a
- * pizza-type string switched over to pick a concrete {@code Pizza}
- * subclass; here it's the presence or absence of {@code loggedInCustomerId}
- * deciding between "update and reuse" versus "construct fresh" for the
- * same {@code Customer} type. Pulling this out of
- * {@link com.eternalprotocol.api.service.OrderService#createOrder} and
- * into its own class keeps that decision in exactly one place, so any
- * future third way to arrive at a checkout (e.g. a saved "buy again"
- * flow) only has to be taught to this factory, not to every caller.
+ * Checkout has two paths, decided by whether the shopper is logged in:
+ * reuse and refresh the existing account, or create a brand-new,
+ * minimal {@code Customer} row for a guest. Keeping that decision here
+ * rather than inline in {@code OrderService.createOrder} means a future
+ * third path (e.g. a saved "buy again" flow) only needs to be taught to
+ * this factory, not to every caller.
  */
 @Component
 public class CustomerFactory {

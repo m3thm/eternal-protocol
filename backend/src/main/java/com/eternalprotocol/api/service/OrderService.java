@@ -24,19 +24,14 @@ import java.util.stream.Collectors;
  * Business logic for placing orders, confirming PayHere payments, and
  * reading back order history.
  * <p>
- * Most read methods here are {@code @Transactional(readOnly = true)}. This
- * matters because every DTO built here reads {@code order.getItems()} and
- * each item's related product/customer — all "lazy" associations that are
- * only fetched from the database when actually read. With
- * {@code open-in-view: false} in this app's configuration, those lazy
- * reads only work while the original database session is still open.
- * Building the DTO inside the same {@code @Transactional} method (instead
- * of returning a raw entity for something else to convert later) is what
- * keeps that session open long enough. Skipping the annotation won't fail
- * in tests, since the test framework happens to wrap a whole test method
- * in one shared transaction — but it will throw a
- * {@code LazyInitializationException} against a real frontend request,
- * where no such wrapping transaction exists.
+ * Most read methods here are {@code @Transactional(readOnly = true)}: DTOs
+ * built here read lazy associations like {@code order.getItems()}, and
+ * with {@code open-in-view: false} those reads only work while the
+ * original database session is still open. Building the DTO inside the
+ * same transactional method keeps that session open long enough — skip
+ * the annotation and it works in tests (which wrap a test method in one
+ * shared transaction) but throws {@code LazyInitializationException}
+ * against a real request.
  */
 @Service
 public class OrderService {
@@ -97,10 +92,9 @@ public class OrderService {
      */
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto request, Long loggedInCustomerId) {
-        // Load every requested product up front and validate stock for
-        // ALL items before creating or decrementing anything — an order
-        // with 3 items where only the 3rd is out of stock should fail
-        // cleanly with no partial order, not create 2 items then blow up.
+        // Validate stock for ALL items before creating or decrementing
+        // anything — an order with 3 items where only the 3rd is out of
+        // stock should fail cleanly, not create 2 items then blow up.
         Map<Long, Product> productsById = new HashMap<>();
         List<String> insufficientStockMessages = new ArrayList<>();
 
@@ -121,18 +115,13 @@ public class OrderService {
                     "Not enough stock for: " + String.join("; ", insufficientStockMessages));
         }
 
-        // Athlete code, if any, applies once to the whole order — not per
-        // line. Resolved as an AthleteReferral (Null Object pattern — see
-        // that interface) rather than a nullable Athlete, so nothing below
-        // needs an "if there was an athlete" check: an invalid/inactive
-        // code simply resolves to NoAthleteReferral, which behaves exactly
-        // like "no discount, no commission" without special-casing it.
+        // Athlete code, if any, applies once to the whole order — resolved
+        // as an AthleteReferral (Null Object pattern) so nothing below
+        // needs an "if there was an athlete" check.
         AthleteReferral referral = resolveReferral(request.athleteCode());
 
-        // Resolve the customer via CustomerFactory (Simple Factory): reuse
-        // the logged-in account if present, otherwise create a fresh
-        // guest row — see that class for why this decision-and-construction
-        // logic lives in its own class rather than inline here.
+        // Reuse the logged-in account if present, otherwise create a
+        // fresh guest row — see CustomerFactory for why this lives there.
         Customer customer = customerFactory.resolveForCheckout(loggedInCustomerId, request);
 
         BigDecimal subtotal = request.items().stream()
@@ -153,23 +142,19 @@ public class OrderService {
         order = orderRepository.save(order);
 
         // Reserve stock at order-creation time (checkout submission), not
-        // on payment confirmation — see class-level note on why, and the
-        // known read-then-write race-condition tradeoff, unchanged from
-        // the single-item version of this method.
+        // on payment confirmation — a known read-then-write race exists,
+        // unchanged from the single-item version of this method.
         for (OrderItemRequestDto itemRequest : request.items()) {
             Product product = productsById.get(itemRequest.productId());
             product.setStockQty(product.getStockQty() - itemRequest.quantity());
             productRepository.save(product);
         }
 
-        // Unconditional — see AthleteReferral: NoAthleteReferral's
-        // implementation of this is a no-op, so this line doesn't need an
-        // "if there was an athlete" check the way it used to.
+        // Unconditional — NoAthleteReferral's implementation is a no-op.
         referral.recordCommission(commissionRepository, order, discount);
 
-        // Logged-in customers checking out empties their persisted cart —
-        // otherwise items they just bought would still show as "in cart"
-        // the next time they load the page.
+        // Clear the persisted cart so items just bought don't still show
+        // as "in cart" on the customer's next visit.
         if (loggedInCustomerId != null) {
             cartService.clearCart(loggedInCustomerId);
         }

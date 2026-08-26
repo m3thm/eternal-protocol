@@ -6,16 +6,9 @@ import java.math.BigDecimal;
 
 /**
  * Database entity for one product line within an {@link Order} — a
- * specific product, size, colour, and quantity.
- * <p>
- * Maps onto the {@code order_items} table. An order has many of these,
- * which is what lets a single checkout (and single PayHere payment) cover
- * several different products and quantities greater than one.
- * <p>
- * <b>Composition:</b> the {@code order} field below is the "child" side of
- * the whole-part relationship declared on {@link Order#getItems()} — see
- * that class's JavaDoc for the {@code cascade}/{@code orphanRemoval} side
- * of the same relationship.
+ * specific product, size, colour, and quantity. An order has many of
+ * these, letting a single checkout and payment cover several products and
+ * quantities greater than one.
  */
 @Entity
 @Table(name = "order_items")

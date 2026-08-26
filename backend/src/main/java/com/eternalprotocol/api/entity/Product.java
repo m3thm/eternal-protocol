@@ -39,11 +39,9 @@ public class Product {
     private ProductCategory category;
 
     /**
-     * Free-text subcategory set by the admin (e.g. "T-Shirts", "Hoodies",
-     * "Caps", "Bags"). Unlike {@code category}, this isn't a fixed set of
-     * values — new subcategories can be added over time. The storefront's
-     * dropdown filters are populated from whatever distinct values
-     * currently exist for a category.
+     * Free-text subcategory set by the admin (e.g. "T-Shirts", "Hoodies").
+     * Unlike {@code category}, this isn't a fixed set — the storefront's
+     * dropdown filters are populated from whatever values currently exist.
      */
     @Column(name = "sub_category", nullable = false)
     private String subCategory;

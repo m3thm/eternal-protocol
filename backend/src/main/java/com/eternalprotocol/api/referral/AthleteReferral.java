@@ -7,23 +7,15 @@ import com.eternalprotocol.api.repository.CommissionRepository;
 import java.math.BigDecimal;
 
 /**
- * Whatever athlete referral — real or absent — applies to one checkout.
+ * Whatever athlete referral — real or absent — applies to one checkout
+ * (Null Object pattern).
  * <p>
- * Before this existed, {@code OrderService.createOrder} decided three
- * separate things by asking "is there an athlete?" every time: how big the
- * discount is, what code (if any) to stamp on the order, and whether a
- * {@link Commission} row should be saved at all. Three call sites, three
- * {@code athlete == null} checks, all needing to agree with each other.
- * <p>
- * This is exactly the shape the Null Object pattern targets. Instead of a
- * nullable {@code Athlete} plus scattered null checks, checkout always
- * holds a real, non-null {@code AthleteReferral} — either
+ * Instead of a nullable {@code Athlete} and scattered null checks,
+ * checkout always holds a real, non-null {@code AthleteReferral}: either
  * {@link AppliedAthleteReferral}, wrapping a genuine athlete code, or the
- * {@link NoAthleteReferral} singleton, which answers every one of these
- * questions with "no effect" instead of the caller having to ask "is it
- * null?" first. {@link NoAthleteReferral#recordCommission} in particular
- * is the pattern's textbook case: a method that does nothing at all when
- * called, so the caller never needs an {@code if} around calling it.
+ * {@link NoAthleteReferral} singleton, which answers every question below
+ * with "no effect" — including a no-op {@code recordCommission} — so
+ * callers never need an {@code if (athlete != null)}.
  */
 public interface AthleteReferral {
 

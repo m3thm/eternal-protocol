@@ -6,24 +6,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A composite {@link CartCommand} — the "MacroCommand" this course's
- * material calls "party mode" functionality: several individual commands
- * bundled together and run (or undone) as a single unit, so
- * {@link CartInvoker} never needs to know whether it's tracking one cart
+ * A composite {@link CartCommand} (MacroCommand pattern): several
+ * commands bundled together and run — or undone — as a single unit, so
+ * {@link CartInvoker} doesn't need to know whether it's tracking one cart
  * mutation or several.
  * <p>
- * The motivating case is "clear cart": rather than deleting every line
- * directly and losing per-line undo, {@code CartInvoker.clearCartAndTrack}
- * builds one {@link RemoveFromCartCommand} per current line and wraps them
- * all in a single {@code MacroCartCommand}. That gives "clear cart" the
- * same one-shot undo the rest of the cart already has, instead of a
- * customer having to undo N times to restore N lines.
+ * Used to clear a whole cart: {@code CartInvoker.clearCartAndTrack} builds
+ * one {@link RemoveFromCartCommand} per line and wraps them all here,
+ * giving "clear cart" the same one-shot undo as any other cart action.
  * <p>
- * {@link #undo()} reverses sub-commands in the opposite order they ran in
- * — the last one executed is the first one undone — the same LIFO
- * ordering {@link CartInvoker} itself uses for its per-customer history,
- * so an interrupted or partial macro always unwinds the same direction it
- * built up.
+ * {@link #undo()} reverses sub-commands in the opposite order they ran,
+ * matching the LIFO ordering {@link CartInvoker} uses for its own history.
  */
 public class MacroCartCommand implements CartCommand {
 
@@ -42,13 +35,9 @@ public class MacroCartCommand implements CartCommand {
     /**
      * Runs every sub-command in order.
      * <p>
-     * {@inheritDoc}
-     * <p>
      * Always returns {@code null}: a macro touches multiple cart lines at
-     * once, so no single {@link CartItemDto} can represent its result the
-     * way a single command's does — a caller that needs the cart's new
-     * state afterward should re-fetch it, which is exactly what
-     * {@code CartInvoker.clearCartAndTrack} does.
+     * once, so no single {@link CartItemDto} can represent its result — a
+     * caller needing the cart's new state should re-fetch it.
      *
      * @return always {@code null}
      */
@@ -62,13 +51,9 @@ public class MacroCartCommand implements CartCommand {
     }
 
     /**
-     * Undoes every sub-command that actually ran, in reverse order.
-     * <p>
-     * Reversing only {@link #executed} (rather than all of
-     * {@link #commands}) matters if a sub-command's own {@code execute()}
-     * were to fail partway through the loop in {@link #execute()} — only
-     * the ones that genuinely ran get undone, not ones that never had an
-     * effect to reverse.
+     * Undoes every sub-command that actually ran, in reverse order — only
+     * {@link #executed}, so a partial failure mid-{@link #execute()} won't
+     * try to undo commands that never ran.
      */
     @Override
     public void undo() {

@@ -6,19 +6,12 @@ import jakarta.persistence.*;
  * Database entity for a single gallery image belonging to one colour of
  * one product style.
  * <p>
- * Maps onto the {@code product_images} table. Deliberately not linked to a
- * specific {@link Product} row — a style/colour combination (e.g.
- * "PRT-001" / "Black") can have several Product rows, one per size, and
- * all of them share the same photos. Images are instead keyed on
- * (styleCode, colour), which lets the product page swap its whole image
- * set the moment a shopper picks a different colour, without duplicating
- * the same image for every size.
- * <p>
- * <b>Dependency:</b> {@link com.eternalprotocol.api.service.ProductImageService}
- * uses a ProductImage only as a local variable and method parameter while
- * handling one request — it never holds a ProductImage as one of its own
- * fields — which is the textbook definition of dependency rather than
- * association.
+ * Deliberately not linked to a specific {@link Product} row — a
+ * style/colour combination (e.g. "PRT-001" / "Black") can have several
+ * Product rows, one per size, and all of them share the same photos.
+ * Images are instead keyed on (styleCode, colour), so the product page can
+ * swap its whole image set when a shopper picks a different colour,
+ * without duplicating images per size.
  */
 @Entity
 @Table(name = "product_images")
@@ -42,21 +35,17 @@ public class ProductImage {
     private String imageUrl;
 
     /**
-     * The image's ID on Cloudinary (Cloudinary's own "public_id"), kept
-     * alongside the URL so a delete can remove the exact asset from
-     * Cloudinary directly, instead of trying to work out an asset ID from
-     * the URL text. Optional only so images created before this field
-     * existed don't break — every new image always has one.
+     * The image's ID on Cloudinary, kept alongside the URL so a delete can
+     * remove the exact asset directly. Optional only so images created
+     * before this field existed don't break.
      */
     @Column(name = "cloudinary_public_id")
     private String cloudinaryPublicId;
 
     /**
-     * Whether this is the one "cover" image for its (styleCode, colour)
-     * pair — the image shown on the shop grid and as the first photo on
-     * the product page. Exactly one image per colour should have this set
-     * to true. Automatically true for the first image uploaded to a new
-     * colour, and can be changed by the admin afterward.
+     * Whether this is the "cover" image for its (styleCode, colour) pair —
+     * shown on the shop grid and as the first product-page photo. Exactly
+     * one image per colour should have this set to true.
      */
     @Column(name = "is_cover", nullable = false)
     private boolean cover = false;
@@ -65,7 +54,7 @@ public class ProductImage {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 
-    /** Default constructor, required by JPA — also used throughout {@code ProductImageService}, which builds an image field-by-field via the setters below. */
+    /** Default constructor, required by JPA. */
     public ProductImage() {
     }
 

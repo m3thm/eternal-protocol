@@ -9,16 +9,9 @@ import java.time.LocalDateTime;
  * Database entity tracking money owed to an athlete for one order placed
  * with their code.
  * <p>
- * Maps onto the {@code commissions} table. Exactly one Commission row is
- * created per order that used an athlete code, and it moves through the
- * stages described in {@link CommissionStatus} as payment is confirmed and
- * later paid out to the athlete.
- * <p>
- * <b>Association:</b> a Commission refers to one Athlete and one Order,
- * both of which exist independently of the Commission — none of the three
- * classes owns another. The {@code @OneToOne(unique = true)} below only
- * constrains how many Commissions may point at the same Order; it does not
- * make this composition.
+ * Exactly one Commission row is created per order that used an athlete
+ * code, and it moves through the stages in {@link CommissionStatus} as
+ * payment is confirmed and later paid out.
  */
 @Entity
 @Table(name = "commissions")
@@ -34,11 +27,7 @@ public class Commission {
     @JoinColumn(name = "athlete_id", nullable = false)
     private Athlete athlete;
 
-    /**
-     * The order this commission is for. {@code @OneToOne} plus
-     * {@code unique = true} means each order can have at most one
-     * commission — never two.
-     */
+    /** The order this commission is for. At most one commission per order. */
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false, unique = true)
     private Order order;

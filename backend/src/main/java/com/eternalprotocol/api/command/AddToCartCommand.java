@@ -7,12 +7,10 @@ import com.eternalprotocol.api.service.CartService;
 /**
  * Command for adding an item to a customer's cart.
  * <p>
- * Because {@link CartService#addOrUpdateItem} either creates a brand-new
- * cart line or increases an existing one's quantity (see that method's
- * JavaDoc), undoing this command has two different outcomes depending on
- * which of those happened — this class checks the cart <em>before</em>
- * calling {@code addOrUpdateItem}, exactly so it knows which case applies
- * when {@link #undo()} is later called.
+ * {@link CartService#addOrUpdateItem} either creates a new line or
+ * increases an existing one's quantity, so undo has two outcomes
+ * depending on which happened — this class snapshots the cart before
+ * calling {@code addOrUpdateItem} so {@link #undo()} knows which case applies.
  */
 public class AddToCartCommand implements CartCommand {
 
@@ -39,10 +37,8 @@ public class AddToCartCommand implements CartCommand {
 
     @Override
     public CartItemDto execute() {
-        // Snapshot whatever quantity the matching line held before this
-        // add — null means the line doesn't exist yet, which is the
-        // signal undo() needs to tell "increment an existing line" apart
-        // from "created a brand-new line".
+        // null means no matching line exists yet — the signal undo() needs
+        // to tell "incremented a line" apart from "created a new one".
         previousQuantity = cartService.getCart(customerId).stream()
                 .filter(line -> line.productId().equals(request.productId())
                         && line.size().equals(request.size())
