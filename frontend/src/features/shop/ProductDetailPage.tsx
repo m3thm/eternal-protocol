@@ -75,7 +75,9 @@ export function ProductDetailPage() {
   const sizes = Array.from(new Set((variants ?? [product]).map((v) => v.size)))
   const activeVariant =
     (variants ?? [product]).find((v) => v.colour === colour && v.size === size) ?? product
-  const outOfStock = activeVariant.stockQty < 1
+  const isComingSoon = activeVariant.status === 'COMING_SOON'
+  const outOfStock = !isComingSoon && activeVariant.stockQty < 1
+  const purchaseDisabled = isComingSoon || outOfStock
 
   // Fall back to the variant's single cover image if the gallery hasn't loaded
   // yet, or if this colour has no gallery rows (e.g. legacy product created
@@ -87,7 +89,7 @@ export function ProductDetailPage() {
       : []
 
   async function handleAddToCart() {
-    if (outOfStock) return
+    if (purchaseDisabled) return
     setAdding(true)
     try {
       if (role === 'CUSTOMER') {
@@ -109,7 +111,7 @@ export function ProductDetailPage() {
   }
 
   function handleBuyNow() {
-    if (outOfStock) return
+    if (purchaseDisabled) return
     navigate('/checkout', { state: { directBuy: { productId: activeVariant.id, quantity: 1 } } })
   }
 
@@ -125,7 +127,9 @@ export function ProductDetailPage() {
 
         <div>
           <h1 className="font-display text-4xl">{product.name}</h1>
-          <Price amount={activeVariant.price} className="mt-3 block text-lg" />
+          {(!isComingSoon || activeVariant.showPrice) && (
+            <Price amount={activeVariant.price} className="mt-3 block text-lg" />
+          )}
 
           <div className="mt-8">
             <div className="mb-2 text-xs uppercase tracking-widest text-ep-muted">Colour — {colour}</div>
@@ -162,7 +166,9 @@ export function ProductDetailPage() {
           </div>
 
           <div className="mt-6 text-sm">
-            {outOfStock ? (
+            {isComingSoon ? (
+              <span className="text-ep-bone">Coming soon — not yet available to order</span>
+            ) : outOfStock ? (
               <span className="text-red-400">Out of stock in this colour/size</span>
             ) : activeVariant.stockQty <= 5 ? (
               <span className="text-amber-400">Only {activeVariant.stockQty} left</span>
@@ -172,11 +178,11 @@ export function ProductDetailPage() {
           </div>
 
           <div className="mt-8 flex gap-3">
-            <Button onClick={handleAddToCart} loading={adding} disabled={outOfStock} variant="secondary" className="flex-1">
-              Add to cart
+            <Button onClick={handleAddToCart} loading={adding} disabled={purchaseDisabled} variant="secondary" className="flex-1">
+              {isComingSoon ? 'Coming soon' : 'Add to cart'}
             </Button>
-            <Button onClick={handleBuyNow} disabled={outOfStock} className="flex-1">
-              Buy now
+            <Button onClick={handleBuyNow} disabled={purchaseDisabled} className="flex-1">
+              {isComingSoon ? 'Coming soon' : 'Buy now'}
             </Button>
           </div>
 

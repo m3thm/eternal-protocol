@@ -2,6 +2,7 @@ package com.eternalprotocol.api.factory.product;
 
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Product;
+import com.eternalprotocol.api.entity.ProductStatus;
 
 /**
  * Factory Method for building a {@link Product} variant, where a
@@ -50,6 +51,10 @@ public abstract class ProductCreator {
         product.setStockQty(request.stockQty());
         product.setDescription(request.description());
         product.setSize(resolveSize(request));
+        // Both default when omitted, rather than requiring every caller
+        // (including existing tests/scripts) to always send them.
+        product.setStatus(request.status() != null ? request.status() : ProductStatus.ACTIVE);
+        product.setShowPrice(request.showPrice() != null ? request.showPrice() : true);
     }
 
     /**

@@ -5,6 +5,8 @@ import com.eternalprotocol.api.dto.CartItemRequestDto;
 import com.eternalprotocol.api.entity.CartItem;
 import com.eternalprotocol.api.entity.Customer;
 import com.eternalprotocol.api.entity.Product;
+import com.eternalprotocol.api.entity.ProductStatus;
+import com.eternalprotocol.api.exception.ProductNotAvailableException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.repository.CartItemRepository;
 import com.eternalprotocol.api.repository.CustomerRepository;
@@ -98,6 +100,21 @@ class CartServiceTest {
 
         assertThatThrownBy(() -> cartService.addOrUpdateItem(1L, request))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void addOrUpdateItem_comingSoonProduct_throwsProductNotAvailableException() {
+        // Blocked regardless of stock — status alone decides this, which is
+        // why stockQty is deliberately left unset (null) here.
+        product.setStatus(ProductStatus.COMING_SOON);
+        CartItemRequestDto request = new CartItemRequestDto(10L, "M", "Black", 1);
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer));
+        when(productRepository.findById(10L)).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> cartService.addOrUpdateItem(1L, request))
+                .isInstanceOf(ProductNotAvailableException.class);
+
+        verify(cartItemRepository, never()).save(any(CartItem.class));
     }
 
     @Test

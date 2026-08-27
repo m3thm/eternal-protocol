@@ -59,7 +59,7 @@ class OrderIntegrationTest {
     private Long createTestProduct(String styleCode, String name, BigDecimal price, int stockQty) throws Exception {
         String adminToken = adminToken();
         ProductRequestDto request = new ProductRequestDto(
-                styleCode, name, ProductCategory.MENS, "T-Shirts", price, "Black", "M", stockQty, null, null);
+                styleCode, name, ProductCategory.MENS, "T-Shirts", price, "Black", "M", stockQty, null, null, null, null);
 
         String response = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))

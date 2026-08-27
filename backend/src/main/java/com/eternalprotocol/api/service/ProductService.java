@@ -4,6 +4,7 @@ import com.eternalprotocol.api.dto.ProductDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Product;
 import com.eternalprotocol.api.entity.ProductCategory;
+import com.eternalprotocol.api.entity.ProductStatus;
 import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.factory.product.ProductCreator;
@@ -50,11 +51,16 @@ public class ProductService {
      * @param styleCode   style code to filter by, or null
      * @param category    top-level category to filter by, or null
      * @param subCategory subcategory to filter by, or null
-     * @return matching products
+     * @param status      lifecycle status to filter by, or null. Storefront
+     *                    pages (category pages, New Drops, Upcoming) always
+     *                    pass this explicitly; leaving it null — as the
+     *                    admin product table does — returns every product
+     *                    regardless of status, newest first
+     * @return matching products, newest first
      */
     public List<ProductDto> getAllProducts(String colour, String size, String styleCode,
-                                            ProductCategory category, String subCategory) {
-        return productRepository.searchStorefront(styleCode, colour, size, category, subCategory)
+                                            ProductCategory category, String subCategory, ProductStatus status) {
+        return productRepository.searchStorefront(styleCode, colour, size, category, subCategory, status)
                 .stream().map(this::toDto).toList();
     }
 
@@ -197,6 +203,7 @@ public class ProductService {
      */
     private ProductDto toDto(Product p) {
         return new ProductDto(p.getId(), p.getStyleCode(), p.getName(), p.getCategory(), p.getSubCategory(),
-                p.getPrice(), p.getColour(), p.getSize(), p.getStockQty(), p.getImageUrl(), p.getDescription());
+                p.getPrice(), p.getColour(), p.getSize(), p.getStockQty(), p.getImageUrl(), p.getDescription(),
+                p.getStatus(), p.isShowPrice(), p.getCreatedAt());
     }
 }

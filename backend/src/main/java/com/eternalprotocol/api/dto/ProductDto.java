@@ -1,8 +1,10 @@
 package com.eternalprotocol.api.dto;
 
 import com.eternalprotocol.api.entity.ProductCategory;
+import com.eternalprotocol.api.entity.ProductStatus;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * A single product variant as shown on the storefront (shop grid and
@@ -19,6 +21,9 @@ import java.math.BigDecimal;
  * @param stockQty    units currently in stock
  * @param imageUrl    main thumbnail image
  * @param description longer description text
+ * @param status      lifecycle status — ACTIVE or COMING_SOON, independent of stock
+ * @param showPrice   whether {@code price} should be displayed; only meaningful while COMING_SOON
+ * @param createdAt   when this variant was first created, admin-immutable — drives the New Drops page
  */
 public record ProductDto(
         Long id,
@@ -31,5 +36,8 @@ public record ProductDto(
         String size,
         Integer stockQty,
         String imageUrl,
-        String description
+        String description,
+        ProductStatus status,
+        boolean showPrice,
+        LocalDateTime createdAt
 ) {}

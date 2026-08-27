@@ -25,6 +25,8 @@ const emptyForm: ProductInput = {
   size: '',
   stockQty: 0,
   description: '',
+  status: 'ACTIVE',
+  showPrice: true,
 }
 
 export function AdminProductsPage() {
@@ -60,6 +62,15 @@ export function AdminProductsPage() {
     { header: 'Colour', cell: (p) => p.colour },
     { header: 'Size', cell: (p) => p.size },
     { header: 'Price', cell: (p) => <Price amount={p.price} /> },
+    {
+      header: 'Status',
+      cell: (p) =>
+        p.status === 'COMING_SOON' ? (
+          <span className="text-xs uppercase tracking-widest text-amber-400">Coming soon</span>
+        ) : (
+          <span className="text-xs uppercase tracking-widest text-ep-muted">Active</span>
+        ),
+    },
     {
       header: 'Stock',
       cell: (p) => (p.stockQty < 1 ? <span className="text-red-400">0</span> : p.stockQty),
@@ -131,6 +142,8 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
           size: product.size,
           stockQty: product.stockQty,
           description: product.description ?? '',
+          status: product.status,
+          showPrice: product.showPrice,
         }
       : emptyForm,
   )
@@ -248,7 +261,33 @@ function ProductFormModal({ product, onClose }: { product: ProductDto | null; on
             onChange={(e) => setForm((f) => ({ ...f, stockQty: Number(e.target.value) }))}
             error={errors.stockQty}
           />
+          <FormSelect
+            label="Status"
+            value={form.status}
+            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ProductInput['status'] }))}
+          >
+            <option value="ACTIVE">Active</option>
+            <option value="COMING_SOON">Coming soon</option>
+          </FormSelect>
+          {form.status === 'COMING_SOON' && (
+            <label className="flex items-center gap-2 self-end pb-2 text-sm text-ep-bone">
+              <input
+                type="checkbox"
+                checked={form.showPrice ?? true}
+                onChange={(e) => setForm((f) => ({ ...f, showPrice: e.target.checked }))}
+                className="h-4 w-4 accent-ep-bone"
+              />
+              Show price while coming soon
+            </label>
+          )}
         </div>
+
+        {form.status === 'COMING_SOON' && (
+          <p className="mt-2 text-xs text-ep-muted">
+            Coming soon products only appear on the Upcoming page and can't be added to a cart — switch this back to
+            Active to launch it on the regular shop.
+          </p>
+        )}
 
         <div className="mt-4">
           <FormTextarea

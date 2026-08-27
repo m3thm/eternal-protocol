@@ -4,6 +4,7 @@ import com.eternalprotocol.api.dto.ProductDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.entity.Product;
 import com.eternalprotocol.api.entity.ProductCategory;
+import com.eternalprotocol.api.entity.ProductStatus;
 import com.eternalprotocol.api.exception.ProductInUseException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.factory.product.ApparelProductCreator;
@@ -62,36 +63,36 @@ class ProductServiceTest {
 
     @Test
     void getAllProducts_noFilters_passesAllNullsToSearch() {
-        when(productRepository.searchStorefront(null, null, null, null, null)).thenReturn(List.of(sampleProduct));
+        when(productRepository.searchStorefront(null, null, null, null, null, null)).thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts(null, null, null, null, null);
+        List<ProductDto> result = productService.getAllProducts(null, null, null, null, null, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo("Protocol 001 Oversized Tee");
         assertThat(result.get(0).styleCode()).isEqualTo("PROTOCOL-001");
         assertThat(result.get(0).category()).isEqualTo(ProductCategory.MENS);
         assertThat(result.get(0).subCategory()).isEqualTo("T-Shirts");
-        verify(productRepository).searchStorefront(null, null, null, null, null);
+        verify(productRepository).searchStorefront(null, null, null, null, null, null);
     }
 
     @Test
     void getAllProducts_colourFilterOnly_passesColourThrough() {
-        when(productRepository.searchStorefront(null, "Black", null, null, null)).thenReturn(List.of(sampleProduct));
+        when(productRepository.searchStorefront(null, "Black", null, null, null, null)).thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts("Black", null, null, null, null);
+        List<ProductDto> result = productService.getAllProducts("Black", null, null, null, null, null);
 
         assertThat(result).hasSize(1);
-        verify(productRepository).searchStorefront(null, "Black", null, null, null);
+        verify(productRepository).searchStorefront(null, "Black", null, null, null, null);
     }
 
     @Test
     void getAllProducts_sizeFilterOnly_passesSizeThrough() {
-        when(productRepository.searchStorefront(null, null, "M", null, null)).thenReturn(List.of(sampleProduct));
+        when(productRepository.searchStorefront(null, null, "M", null, null, null)).thenReturn(List.of(sampleProduct));
 
-        List<ProductDto> result = productService.getAllProducts(null, "M", null, null, null);
+        List<ProductDto> result = productService.getAllProducts(null, "M", null, null, null, null);
 
         assertThat(result).hasSize(1);
-        verify(productRepository).searchStorefront(null, null, "M", null, null);
+        verify(productRepository).searchStorefront(null, null, "M", null, null, null);
     }
 
     @Test
@@ -107,10 +108,10 @@ class ProductServiceTest {
         whiteVariant.setSize("M");
         whiteVariant.setStockQty(30);
 
-        when(productRepository.searchStorefront("PROTOCOL-001", null, null, null, null))
+        when(productRepository.searchStorefront("PROTOCOL-001", null, null, null, null, null))
                 .thenReturn(List.of(sampleProduct, whiteVariant));
 
-        List<ProductDto> result = productService.getAllProducts(null, null, "PROTOCOL-001", null, null);
+        List<ProductDto> result = productService.getAllProducts(null, null, "PROTOCOL-001", null, null, null);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(ProductDto::colour).containsExactlyInAnyOrder("Black", "White");
@@ -118,24 +119,39 @@ class ProductServiceTest {
 
     @Test
     void getAllProducts_allFiveFiltersCombined_passesAllThrough() {
-        when(productRepository.searchStorefront("PROTOCOL-001", "Black", "M", ProductCategory.MENS, "T-Shirts"))
+        when(productRepository.searchStorefront("PROTOCOL-001", "Black", "M", ProductCategory.MENS, "T-Shirts", null))
                 .thenReturn(List.of(sampleProduct));
 
         List<ProductDto> result =
-                productService.getAllProducts("Black", "M", "PROTOCOL-001", ProductCategory.MENS, "T-Shirts");
+                productService.getAllProducts("Black", "M", "PROTOCOL-001", ProductCategory.MENS, "T-Shirts", null);
 
         assertThat(result).hasSize(1);
-        verify(productRepository).searchStorefront("PROTOCOL-001", "Black", "M", ProductCategory.MENS, "T-Shirts");
+        verify(productRepository).searchStorefront("PROTOCOL-001", "Black", "M", ProductCategory.MENS, "T-Shirts", null);
     }
 
     @Test
     void getAllProducts_categoryOnly_passesCategoryThrough() {
-        when(productRepository.searchStorefront(null, null, null, ProductCategory.WOMENS, null))
+        when(productRepository.searchStorefront(null, null, null, ProductCategory.WOMENS, null, null))
                 .thenReturn(List.of());
 
-        productService.getAllProducts(null, null, null, ProductCategory.WOMENS, null);
+        productService.getAllProducts(null, null, null, ProductCategory.WOMENS, null, null);
 
-        verify(productRepository).searchStorefront(null, null, null, ProductCategory.WOMENS, null);
+        verify(productRepository).searchStorefront(null, null, null, ProductCategory.WOMENS, null, null);
+    }
+
+    @Test
+    void getAllProducts_statusFilter_passesStatusThrough() {
+        // Storefront pages (category pages, New Drops) always pass ACTIVE
+        // explicitly so a COMING_SOON product never leaks into normal
+        // browsing — the admin table is the one caller that leaves this
+        // null to see everything regardless of status.
+        when(productRepository.searchStorefront(null, null, null, null, null, ProductStatus.ACTIVE))
+                .thenReturn(List.of(sampleProduct));
+
+        List<ProductDto> result = productService.getAllProducts(null, null, null, null, null, ProductStatus.ACTIVE);
+
+        assertThat(result).hasSize(1);
+        verify(productRepository).searchStorefront(null, null, null, null, null, ProductStatus.ACTIVE);
     }
 
     @Test
@@ -175,7 +191,7 @@ class ProductServiceTest {
         // empty, so whatever the request explicitly provided is used as-is.
         ProductRequestDto request = new ProductRequestDto(
                 "PROTOCOL-002", "New Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("3000.00"), "White", "L", 20, "img.png", "desc");
+                new BigDecimal("3000.00"), "White", "L", 20, "img.png", "desc", null, null);
         when(productImageService.getCoverImageUrl("PROTOCOL-002", "White")).thenReturn(Optional.empty());
         when(productCreatorFactory.creatorFor(ProductCategory.MENS)).thenReturn(new ApparelProductCreator());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> {
@@ -201,7 +217,7 @@ class ProductServiceTest {
         // cover wins over whatever (if anything) the request passed.
         ProductRequestDto request = new ProductRequestDto(
                 "PROTOCOL-003", "Cover Test Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("3000.00"), "Black", "M", 10, null, null);
+                new BigDecimal("3000.00"), "Black", "M", 10, null, null, null, null);
         when(productImageService.getCoverImageUrl("PROTOCOL-003", "Black"))
                 .thenReturn(Optional.of("https://cloudinary.example.com/gallery-cover.png"));
         when(productCreatorFactory.creatorFor(ProductCategory.MENS)).thenReturn(new ApparelProductCreator());
@@ -216,7 +232,7 @@ class ProductServiceTest {
     void updateProduct_existingProduct_updatesFieldsIncludingStyleCode() {
         ProductRequestDto request = new ProductRequestDto(
                 "PROTOCOL-001-V2", "Updated Tee", ProductCategory.WOMENS, "Hoodies",
-                new BigDecimal("5000.00"), "Grey", "XL", 10, "img2.png", "desc2");
+                new BigDecimal("5000.00"), "Grey", "XL", 10, "img2.png", "desc2", null, null);
         when(productRepository.findById(1L)).thenReturn(Optional.of(sampleProduct));
         when(productImageService.getCoverImageUrl("PROTOCOL-001-V2", "Grey")).thenReturn(Optional.empty());
         when(productCreatorFactory.creatorFor(ProductCategory.WOMENS)).thenReturn(new ApparelProductCreator());
@@ -237,7 +253,7 @@ class ProductServiceTest {
     @Test
     void updateProduct_notFound_throwsResourceNotFoundException() {
         ProductRequestDto request = new ProductRequestDto(
-                "STYLE-X", "X", ProductCategory.ACCESSORIES, "Caps", BigDecimal.TEN, "Red", "S", 5, null, null);
+                "STYLE-X", "X", ProductCategory.ACCESSORIES, "Caps", BigDecimal.TEN, "Red", "S", 5, null, null, null, null);
         when(productRepository.findById(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.updateProduct(404L, request))

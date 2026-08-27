@@ -5,6 +5,8 @@ import com.eternalprotocol.api.dto.CartItemRequestDto;
 import com.eternalprotocol.api.entity.CartItem;
 import com.eternalprotocol.api.entity.Customer;
 import com.eternalprotocol.api.entity.Product;
+import com.eternalprotocol.api.entity.ProductStatus;
+import com.eternalprotocol.api.exception.ProductNotAvailableException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.repository.CartItemRepository;
 import com.eternalprotocol.api.repository.CustomerRepository;
@@ -68,7 +70,8 @@ public class CartService {
      * @param customerId customer's database ID
      * @param request    item to add
      * @return the added or updated cart line
-     * @throws ResourceNotFoundException if the customer or product doesn't exist
+     * @throws ResourceNotFoundException    if the customer or product doesn't exist
+     * @throws ProductNotAvailableException if the product is COMING_SOON
      */
     @Transactional
     public CartItemDto addOrUpdateItem(Long customerId, CartItemRequestDto request) {
@@ -76,6 +79,11 @@ public class CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
         Product product = productRepository.findById(request.productId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + request.productId()));
+
+        if (product.getStatus() == ProductStatus.COMING_SOON) {
+            throw new ProductNotAvailableException(
+                    "\"" + product.getName() + "\" hasn't launched yet and can't be added to your cart.");
+        }
 
         CartItem item = cartItemRepository
                 .findByCustomerIdAndProductIdAndSizeAndColour(customerId, request.productId(), request.size(), request.colour())

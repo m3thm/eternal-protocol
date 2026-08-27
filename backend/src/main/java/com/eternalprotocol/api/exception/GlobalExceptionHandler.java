@@ -85,6 +85,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles an attempt to add a COMING_SOON product to a cart or order.
+     *
+     * @param ex the thrown exception
+     * @return 409 response
+     */
+    @ExceptionHandler(ProductNotAvailableException.class)
+    public ResponseEntity<Map<String, Object>> handleProductNotAvailable(ProductNotAvailableException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
      * Handles a failed image upload to Cloudinary.
      *
      * @param ex the thrown exception

@@ -3,6 +3,7 @@ package com.eternalprotocol.api.entity;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * Database entity for a single purchasable variant (one specific colour +
@@ -69,6 +70,51 @@ public class Product {
     /** Longer free-text description shown on the product detail page. */
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    /**
+     * Where this variant sits in its storefront lifecycle — see
+     * {@link ProductStatus}. Kept independent of {@link #stockQty}: this
+     * is never inferred, only ever set explicitly by an admin.
+     * <p>
+     * {@code columnDefinition} gives existing rows a safe default when
+     * this column is first added to an already-populated table.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, columnDefinition = "varchar(20) default 'ACTIVE'")
+    private ProductStatus status = ProductStatus.ACTIVE;
+
+    /**
+     * Whether the price should be displayed to shoppers. Only meaningful
+     * while {@link #status} is {@link ProductStatus#COMING_SOON} — an
+     * {@code ACTIVE} product's price is always shown regardless of this
+     * flag. Lets an admin choose whether to reveal pricing ahead of
+     * launch.
+     */
+    @Column(name = "show_price", nullable = false, columnDefinition = "boolean default true")
+    private boolean showPrice = true;
+
+    /**
+     * When this product variant was first created. Set automatically on
+     * insert (see {@link #onCreate}) and never changed afterward — not
+     * admin-editable, and untouched by updates. Powers the New Drops page
+     * and the homepage's "New drops" rail.
+     */
+    @Column(name = "created_at", nullable = false, updatable = false,
+            columnDefinition = "timestamp default current_timestamp")
+    private LocalDateTime createdAt;
+
+    /**
+     * JPA lifecycle callback that stamps {@link #createdAt} the moment
+     * this row is first persisted. Deliberately not settable through
+     * {@link com.eternalprotocol.api.dto.ProductRequestDto} — the admin
+     * doesn't choose this value, the database does.
+     */
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 
     /** Default constructor, required by JPA. */
     public Product() {
@@ -189,5 +235,25 @@ public class Product {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public ProductStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(ProductStatus status) {
+        this.status = status;
+    }
+
+    public boolean isShowPrice() {
+        return showPrice;
+    }
+
+    public void setShowPrice(boolean showPrice) {
+        this.showPrice = showPrice;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }

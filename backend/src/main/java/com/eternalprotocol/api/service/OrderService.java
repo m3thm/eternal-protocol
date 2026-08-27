@@ -3,6 +3,7 @@ package com.eternalprotocol.api.service;
 import com.eternalprotocol.api.dto.*;
 import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.InsufficientStockException;
+import com.eternalprotocol.api.exception.ProductNotAvailableException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.factory.CustomerFactory;
 import com.eternalprotocol.api.referral.AppliedAthleteReferral;
@@ -87,14 +88,19 @@ public class OrderService {
      * @param request             checkout details: items, delivery info, optional athlete code
      * @param loggedInCustomerId  the current logged-in customer's ID, or null for a guest checkout
      * @return the created order's ID, total, and PayHere payment URL
-     * @throws ResourceNotFoundException   if a requested product or the logged-in customer doesn't exist
-     * @throws InsufficientStockException  if any requested item exceeds available stock
+     * @throws ResourceNotFoundException    if a requested product or the logged-in customer doesn't exist
+     * @throws InsufficientStockException   if any requested item exceeds available stock
+     * @throws ProductNotAvailableException if any requested item is COMING_SOON — checked
+     *                                       here (not just in {@code CartService}) because
+     *                                       guest checkout builds its order straight from
+     *                                       the client-side cart and never goes through
+     *                                       {@code CartService} at all
      */
     @Transactional
     public OrderResponseDto createOrder(OrderRequestDto request, Long loggedInCustomerId) {
-        // Validate stock for ALL items before creating or decrementing
-        // anything — an order with 3 items where only the 3rd is out of
-        // stock should fail cleanly, not create 2 items then blow up.
+        // Validate availability and stock for ALL items before creating or
+        // decrementing anything — an order with 3 items where only the 3rd
+        // has a problem should fail cleanly, not create 2 items then blow up.
         Map<Long, Product> productsById = new HashMap<>();
         List<String> insufficientStockMessages = new ArrayList<>();
 
@@ -102,6 +108,11 @@ public class OrderService {
             Product product = productRepository.findById(itemRequest.productId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + itemRequest.productId()));
             productsById.put(itemRequest.productId(), product);
+
+            if (product.getStatus() == ProductStatus.COMING_SOON) {
+                throw new ProductNotAvailableException(
+                        "\"" + product.getName() + "\" hasn't launched yet and can't be ordered.");
+            }
 
             if (product.getStockQty() == null || product.getStockQty() < itemRequest.quantity()) {
                 insufficientStockMessages.add("\"" + product.getName() + "\" (" + itemRequest.colour() + "/" + itemRequest.size() + ")"

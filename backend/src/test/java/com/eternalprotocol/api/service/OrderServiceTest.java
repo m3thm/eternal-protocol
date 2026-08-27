@@ -5,6 +5,7 @@ import com.eternalprotocol.api.dto.OrderRequestDto;
 import com.eternalprotocol.api.dto.OrderResponseDto;
 import com.eternalprotocol.api.entity.*;
 import com.eternalprotocol.api.exception.InsufficientStockException;
+import com.eternalprotocol.api.exception.ProductNotAvailableException;
 import com.eternalprotocol.api.exception.ResourceNotFoundException;
 import com.eternalprotocol.api.factory.CustomerFactory;
 import com.eternalprotocol.api.repository.*;
@@ -276,6 +277,27 @@ class OrderServiceTest {
 
         assertThatThrownBy(() -> orderService.createOrder(request, null))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createOrder_comingSoonProduct_throwsProductNotAvailableExceptionAndCreatesNothing() {
+        // Checked directly in OrderService, not just CartService — this is
+        // exactly the path guest checkout takes, which never goes through
+        // CartService at all. Plenty of stock on the product; status alone
+        // is what blocks it.
+        tee.setStatus(ProductStatus.COMING_SOON);
+        OrderItemRequestDto item = new OrderItemRequestDto(1L, "M", "Black", 1);
+        OrderRequestDto request = new OrderRequestDto(
+                "Jane Doe", "0771234567", "123 Main St", List.of(item), null);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(tee));
+
+        assertThatThrownBy(() -> orderService.createOrder(request, null))
+                .isInstanceOf(ProductNotAvailableException.class)
+                .hasMessageContaining("Protocol 001 Oversized Tee");
+
+        verifyNoInteractions(customerFactory);
+        verify(orderRepository, never()).save(any());
+        verify(productRepository, never()).save(any());
     }
 
     @Test

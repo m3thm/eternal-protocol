@@ -16,6 +16,13 @@ export interface ApiError {
 
 export type ProductCategory = 'MENS' | 'WOMENS' | 'ACCESSORIES'
 
+// Independent of stock — a product can be ACTIVE with zero stock (shown as
+// "Sold out"), and a COMING_SOON product's stock is irrelevant until launch.
+// COMING_SOON products never appear in the regular category pages or New
+// Drops, only on the dedicated Upcoming page, and can never be added to a
+// cart or ordered (enforced server-side too, not just in this UI).
+export type ProductStatus = 'ACTIVE' | 'COMING_SOON'
+
 export interface ProductDto {
   id: number
   styleCode: string
@@ -28,6 +35,11 @@ export interface ProductDto {
   stockQty: number
   imageUrl: string | null
   description: string | null
+  status: ProductStatus
+  /** Whether the price should be shown to shoppers. Only meaningful while status is COMING_SOON. */
+  showPrice: boolean
+  /** When this variant was first created — admin-immutable, drives New Drops. ISO 8601 string. */
+  createdAt: string
 }
 
 export interface ProductInput {
@@ -40,6 +52,8 @@ export interface ProductInput {
   size: string
   stockQty: number
   description?: string
+  status?: ProductStatus
+  showPrice?: boolean
 }
 
 export interface UploadImageResponse {

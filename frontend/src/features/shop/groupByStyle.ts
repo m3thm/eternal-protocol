@@ -1,4 +1,4 @@
-import type { ProductDto } from '@/types'
+import type { ProductDto, ProductStatus } from '@/types'
 
 export interface StyleGroup {
   styleCode: string
@@ -12,6 +12,16 @@ export interface StyleGroup {
   inStock: boolean
   /** A representative variant id to link the card to, resolved further on the PDP. */
   representativeId: number
+  /**
+   * This style's lifecycle status. Every variant of one style is expected to
+   * share the same status (an admin launches a whole style at once), so the
+   * first variant's status is taken as representative.
+   */
+  status: ProductStatus
+  /** Whether to display fromPrice — only meaningful while status is COMING_SOON. */
+  showPrice: boolean
+  /** Earliest createdAt across this style's variants — its "drop date". Powers New Drops sorting. */
+  createdAt: string
 }
 
 /** GET /api/products returns one row per colour/size variant; group by styleCode for the grid. */
@@ -25,6 +35,9 @@ export function groupByStyle(products: ProductDto[]): StyleGroup[] {
 
   return Array.from(groups.entries()).map(([styleCode, variants]) => {
     const withImage = variants.find((v) => v.imageUrl) ?? variants[0]
+    const earliestCreatedAt = variants
+      .map((v) => v.createdAt)
+      .sort()[0]
     return {
       styleCode,
       name: variants[0].name,
@@ -33,6 +46,9 @@ export function groupByStyle(products: ProductDto[]): StyleGroup[] {
       colours: Array.from(new Set(variants.map((v) => v.colour))),
       inStock: variants.some((v) => v.stockQty > 0),
       representativeId: variants[0].id,
+      status: variants[0].status,
+      showPrice: variants[0].showPrice,
+      createdAt: earliestCreatedAt,
     }
   })
 }
@@ -60,4 +76,9 @@ export function sortStyles(styles: StyleGroup[], sortKey: SortKey | undefined): 
     case 'price_desc':
       return sorted.sort((a, b) => b.fromPrice - a.fromPrice)
   }
+}
+
+/** Newest-first by createdAt — used by the New Drops page and the homepage's New Drops tab. */
+export function sortStylesByNewest(styles: StyleGroup[]): StyleGroup[] {
+  return [...styles].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }

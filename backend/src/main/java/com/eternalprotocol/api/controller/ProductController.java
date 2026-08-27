@@ -7,6 +7,7 @@ import com.eternalprotocol.api.dto.ProductImageRequestDto;
 import com.eternalprotocol.api.dto.ProductRequestDto;
 import com.eternalprotocol.api.dto.ReorderImagesRequestDto;
 import com.eternalprotocol.api.entity.ProductCategory;
+import com.eternalprotocol.api.entity.ProductStatus;
 import com.eternalprotocol.api.service.ImageUploadService;
 import com.eternalprotocol.api.service.ProductImageService;
 import com.eternalprotocol.api.service.ProductService;
@@ -56,7 +57,11 @@ public class ProductController {
      * @param styleCode   style code to filter by, optional
      * @param category    top-level category to filter by, optional
      * @param subCategory subcategory to filter by, optional
-     * @return matching products
+     * @param status      lifecycle status to filter by, optional. The
+     *                    storefront (category pages, New Drops, Upcoming)
+     *                    always passes this; the admin product table leaves
+     *                    it out to see every product regardless of status
+     * @return matching products, newest first
      */
     @GetMapping
     public ResponseEntity<List<ProductDto>> getAllProducts(
@@ -64,8 +69,9 @@ public class ProductController {
             @RequestParam(required = false) String size,
             @RequestParam(required = false) String styleCode,
             @RequestParam(required = false) ProductCategory category,
-            @RequestParam(required = false) String subCategory) {
-        return ResponseEntity.ok(productService.getAllProducts(colour, size, styleCode, category, subCategory));
+            @RequestParam(required = false) String subCategory,
+            @RequestParam(required = false) ProductStatus status) {
+        return ResponseEntity.ok(productService.getAllProducts(colour, size, styleCode, category, subCategory, status));
     }
 
     /**

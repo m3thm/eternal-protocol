@@ -40,7 +40,7 @@ class CustomerIntegrationTest {
                 "customer.integration.admin@example.com", "adminpass123");
         ProductRequestDto request = new ProductRequestDto(
                 "CART-TEST", "Cart Test Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("2000.00"), "Green", "M", 20, null, null);
+                new BigDecimal("2000.00"), "Green", "M", 20, null, null, null, null);
         String response = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)

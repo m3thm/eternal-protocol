@@ -10,6 +10,8 @@ import { ForbiddenPage } from '@/pages/ForbiddenPage'
 import { ConfirmationPage } from '@/pages/ConfirmationPage'
 
 import { ShopPage } from '@/features/shop/ShopPage'
+import { NewDropsPage } from '@/features/shop/NewDropsPage'
+import { UpcomingPage } from '@/features/shop/UpcomingPage'
 import { ProductDetailPage } from '@/features/shop/ProductDetailPage'
 import { CartPage } from '@/features/cart/CartPage'
 import { CheckoutPage } from '@/features/checkout/CheckoutPage'
@@ -33,6 +35,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/shop" element={<ShopPage />} />
+          {/* Not in CATEGORY_NAV — reachable only from the homepage, never shown in the navbar. */}
+          <Route path="/shop/new-drops" element={<NewDropsPage />} />
+          <Route path="/shop/upcoming" element={<UpcomingPage />} />
           <Route path="/shop/:categorySlug" element={<ShopPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />

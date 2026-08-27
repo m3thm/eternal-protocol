@@ -5,6 +5,7 @@ import type {
   ProductImageDto,
   ProductImageInput,
   ProductInput,
+  ProductStatus,
   UploadImageResponse,
 } from '@/types'
 
@@ -14,6 +15,13 @@ export interface ProductQuery {
   styleCode?: string
   category?: ProductCategory
   subCategory?: string
+  /**
+   * Storefront pages (category pages, New Drops, Upcoming) always pass this
+   * explicitly so a COMING_SOON product never leaks into normal browsing.
+   * Leave it out — as the admin product table does — to see every product
+   * regardless of status.
+   */
+  status?: ProductStatus
 }
 
 export const productsApi = {

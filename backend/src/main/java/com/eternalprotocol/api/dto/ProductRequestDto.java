@@ -1,6 +1,7 @@
 package com.eternalprotocol.api.dto;
 
 import com.eternalprotocol.api.entity.ProductCategory;
+import com.eternalprotocol.api.entity.ProductStatus;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +19,9 @@ import java.math.BigDecimal;
  * @param name        product name shown to customers
  * @param category    top-level section
  * @param subCategory admin-set subcategory
- * @param price       price, must be greater than 0
+ * @param price       price, must be greater than 0. Still required even for a
+ *                     COMING_SOON product — whether it's actually displayed to
+ *                     shoppers is controlled separately by {@code showPrice}
  * @param colour      colour of this variant
  * @param size        size of this variant. Required for MENS/WOMENS; may be
  *                     left blank for ACCESSORIES, which defaults to "One Size" —
@@ -26,6 +29,10 @@ import java.math.BigDecimal;
  * @param stockQty    units in stock, cannot be negative
  * @param imageUrl    main thumbnail image URL, obtained from the upload endpoint
  * @param description longer description text
+ * @param status      lifecycle status; null defaults to ACTIVE (see {@code ProductCreator})
+ * @param showPrice   whether to display the price; null defaults to true. Only
+ *                     meaningful while status is COMING_SOON — an ACTIVE
+ *                     product's price is always shown
  */
 public record ProductRequestDto(
         @NotBlank(message = "Style code is required") String styleCode,
@@ -37,5 +44,7 @@ public record ProductRequestDto(
         String size,
         @NotNull(message = "Stock quantity is required") @Min(value = 0, message = "Stock cannot be negative") Integer stockQty,
         String imageUrl,
-        String description
+        String description,
+        ProductStatus status,
+        Boolean showPrice
 ) {}

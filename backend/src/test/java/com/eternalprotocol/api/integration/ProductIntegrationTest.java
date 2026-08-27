@@ -46,7 +46,7 @@ class ProductIntegrationTest {
         String adminToken = adminToken("product.list.admin@example.com");
         ProductRequestDto request = new ProductRequestDto(
                 "LIST-TEST", "Listing Test Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("2000.00"), "Grey", "M", 10, null, null);
+                new BigDecimal("2000.00"), "Grey", "M", 10, null, null, null, null);
         mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -72,7 +72,7 @@ class ProductIntegrationTest {
     void createProduct_noToken_returns401() throws Exception {
         ProductRequestDto request = new ProductRequestDto(
                 "TEST-STYLE", "New Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("3000.00"), "White", "L", 20, null, null);
+                new BigDecimal("3000.00"), "White", "L", 20, null, null, null, null);
 
         mockMvc.perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -87,7 +87,7 @@ class ProductIntegrationTest {
         String token = registerCustomerAndGetToken(mockMvc, objectMapper, "product.customer@example.com");
         ProductRequestDto request = new ProductRequestDto(
                 "TEST-STYLE", "New Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("3000.00"), "White", "L", 20, null, null);
+                new BigDecimal("3000.00"), "White", "L", 20, null, null, null, null);
 
         mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(token))
@@ -102,7 +102,7 @@ class ProductIntegrationTest {
         ProductRequestDto request = new ProductRequestDto(
                 "TEST-STYLE", "Integration Test Tee", ProductCategory.MENS, "T-Shirts",
                 new BigDecimal("3000.00"), "White", "L", 20,
-                "https://example.com/img.png", "A test product");
+                "https://example.com/img.png", "A test product", null, null);
 
         String responseJson = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -127,7 +127,7 @@ class ProductIntegrationTest {
         String adminToken = adminToken("product.update.admin@example.com");
         ProductRequestDto createRequest = new ProductRequestDto(
                 "TEST-STYLE", "Original Name", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("1000.00"), "Red", "S", 5, null, null);
+                new BigDecimal("1000.00"), "Red", "S", 5, null, null, null, null);
 
         String createResponse = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -138,7 +138,7 @@ class ProductIntegrationTest {
 
         ProductRequestDto updateRequest = new ProductRequestDto(
                 "TEST-STYLE", "Renamed", ProductCategory.WOMENS, "Hoodies",
-                new BigDecimal("1200.00"), "Blue", "M", 8, null, null);
+                new BigDecimal("1200.00"), "Blue", "M", 8, null, null, null, null);
 
         mockMvc.perform(put("/api/products/" + productId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -156,7 +156,7 @@ class ProductIntegrationTest {
         String adminToken = adminToken("product.delete.admin@example.com");
         ProductRequestDto createRequest = new ProductRequestDto(
                 "TEST-STYLE", "To Be Deleted", ProductCategory.ACCESSORIES, "Caps",
-                new BigDecimal("500.00"), "Black", "S", 1, null, null);
+                new BigDecimal("500.00"), "Black", "S", 1, null, null, null, null);
 
         String createResponse = mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -180,10 +180,10 @@ class ProductIntegrationTest {
 
         ProductRequestDto blackVariant = new ProductRequestDto(
                 styleCode, "Grouping Test Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("2500.00"), "Black", "M", 10, null, null);
+                new BigDecimal("2500.00"), "Black", "M", 10, null, null, null, null);
         ProductRequestDto whiteVariant = new ProductRequestDto(
                 styleCode, "Grouping Test Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("2500.00"), "White", "M", 10, null, null);
+                new BigDecimal("2500.00"), "White", "M", 10, null, null, null, null);
 
         mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -258,10 +258,10 @@ class ProductIntegrationTest {
 
         ProductRequestDto mensProduct = new ProductRequestDto(
                 mensStyle, "Mens Filter Tee", ProductCategory.MENS, "T-Shirts",
-                new BigDecimal("2500.00"), "Black", "M", 10, null, null);
+                new BigDecimal("2500.00"), "Black", "M", 10, null, null, null, null);
         ProductRequestDto womensProduct = new ProductRequestDto(
                 womensStyle, "Womens Filter Hoodie", ProductCategory.WOMENS, "Hoodies",
-                new BigDecimal("4500.00"), "Pink", "S", 10, null, null);
+                new BigDecimal("4500.00"), "Pink", "S", 10, null, null, null, null);
 
         mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -292,7 +292,7 @@ class ProductIntegrationTest {
 
         ProductRequestDto product = new ProductRequestDto(
                 styleCode, "Subcategory Filter Cap", ProductCategory.ACCESSORIES, "Caps",
-                new BigDecimal("1500.00"), "Black", "One Size", 10, null, null);
+                new BigDecimal("1500.00"), "Black", "One Size", 10, null, null, null, null);
 
         mockMvc.perform(post("/api/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
@@ -316,13 +316,13 @@ class ProductIntegrationTest {
 
         ProductRequestDto cap = new ProductRequestDto(
                 "CAP-" + suffix, "Test Cap", ProductCategory.ACCESSORIES, "Caps-" + suffix,
-                new BigDecimal("1500.00"), "Black", "One Size", 10, null, null);
+                new BigDecimal("1500.00"), "Black", "One Size", 10, null, null, null, null);
         ProductRequestDto bag = new ProductRequestDto(
                 "BAG-" + suffix, "Test Bag", ProductCategory.ACCESSORIES, "Bags-" + suffix,
-                new BigDecimal("3500.00"), "Black", "One Size", 10, null, null);
+                new BigDecimal("3500.00"), "Black", "One Size", 10, null, null, null, null);
         ProductRequestDto tee = new ProductRequestDto(
                 "TEE-" + suffix, "Test Tee", ProductCategory.MENS, "T-Shirts-" + suffix,
-                new BigDecimal("2500.00"), "Black", "M", 10, null, null);
+                new BigDecimal("2500.00"), "Black", "M", 10, null, null, null, null);
 
         for (ProductRequestDto p : new ProductRequestDto[]{cap, bag, tee}) {
             mockMvc.perform(post("/api/products")
